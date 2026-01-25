@@ -1,0 +1,318 @@
+@import '../../../../src/resources/colors/colors.css'; /* optional: ensure vars available */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-caja {
+  background: var(--color-bg, #fff);
+  color: var(--color-text, #000);
+  padding: 24px;
+  width: 480px;
+  max-height: 85vh;
+  overflow-y: auto;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+
+.modal-caja h3 {
+  margin: 0 0 16px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-primary);
+  text-align: center;
+}
+
+.modal-caja label {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-soft, #333);
+}
+
+.modal-caja input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  margin-top: 6px;
+  border: 1px solid var(--color-border, #dcdcdc);
+  border-radius: 6px;
+  font-size: 14px;
+  background: rgba(255,255,255,0.03);
+  color: var(--color-text);
+  box-sizing: border-box;
+}
+
+.modal-caja input[type="text"]:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(176,116,69,0.1);
+}
+
+/* ===== APERTURA SECTION ===== */
+.apertura-section {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.apertura-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.base-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.base-input-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.base-input-group label {
+  margin-top: 0;
+  font-size: 12px;
+  color: var(--color-text-soft);
+}
+
+.base-input-group input {
+  margin-top: 4px;
+}
+
+/* ===== DENOM SECTION ===== */
+.denom-section {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.denom-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.denom-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  padding-right: 4px;
+}
+
+.denom-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.denom-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.denom-list::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.denom-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 110px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  background: rgba(255,255,255,0.01);
+  border-radius: 4px;
+}
+
+.denom-label {
+  font-weight: 500;
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+.denom-count {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.denom-subtotal {
+  text-align: right;
+  color: var(--color-text-soft);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.denom-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 8px;
+  border-top: 1px dashed var(--color-border);
+  margin-top: 8px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+/* ===== METODOS SECTION ===== */
+.metodos-section {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.metodos-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metodo-row {
+  display: grid;
+  grid-template-columns: 1fr 120px 100px;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 10px 8px;
+  background: rgba(255,255,255,0.01);
+  border-radius: 4px;
+}
+
+.metodo-label {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+.metodo-total {
+  text-align: right;
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.metodo-found {
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.metodo-total-sum {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 8px;
+  border-top: 1px dashed var(--color-border);
+  margin-top: 10px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+/* ===== MODAL BUTTONS ===== */
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.btn-cancelar,
+.btn-abrir {
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.2s ease;
+}
+
+.btn-cancelar {
+  background: black;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.btn-cancelar:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.896);
+  border-color: var(--color-text-soft);
+}
+
+.btn-abrir {
+  background: var(--color-primary);
+  color: var(--color-text);
+  box-shadow: 0 4px 12px rgba(176,116,69,0.2);
+}
+
+.btn-abrir:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(176,116,69,0.3);
+}
+
+.btn-cancelar:disabled,
+.btn-abrir:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ===== BUTTON OPEN STATE ===== */
+.btn-caja.open {
+  opacity: 0.5 !important;
+  pointer-events: none;
+}
+
+/* ===== SCROLLBAR STYLING ===== */
+.modal-caja::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-caja::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-caja::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.modal-caja::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-soft);
+}

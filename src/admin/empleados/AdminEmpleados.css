@@ -1,0 +1,120 @@
+@import '../../resources/colors/colors.css';
+
+:root {
+  --color-primary: #b07445;
+  --color-secondary: #c88d5c;
+  --color-bg: #ffffff;
+  --color-text: #000000;
+  --color-text-soft: #333333;
+  --color-border: rgba(255, 255, 255, 0.15);
+}
+
+.empleados-container {
+  padding: 20px;
+  background: #1a1a1a;
+  border-radius: 8px;
+  margin-top: 20px;
+  border: 1px solid var(--color-border);
+}
+
+.empleados-container h2 {
+  margin-bottom: 20px;
+  color: var(--color-primary);
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.empleados-table {
+  overflow-x: auto;
+  background: #2a2a2a;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--color-border);
+}
+
+.empleados-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.empleados-table th {
+  background-color: var(--color-secondary);
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: white;
+  border-bottom: 2px solid var(--color-primary);
+}
+
+.empleados-table td {
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--color-text);
+}
+
+.empleados-table tr:hover {
+  background-color: #3a3a3a;
+}
+
+.empleados-table input,
+.empleados-table select {
+  padding: 6px;
+  border: 1px solid var(--color-primary);
+  border-radius: 4px;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--color-text);
+  background-color: #2a2a2a;
+}
+
+.empleados-table input:focus,
+.empleados-table select:focus {
+  outline: none;
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 2px rgba(200, 141, 92, 0.2);
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-btn,
+.save-btn,
+.cancel-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.3s;
+}
+
+.edit-btn {
+  color: var(--color-primary);
+}
+
+.edit-btn:hover {
+  background-color: rgba(176, 116, 69, 0.2);
+}
+
+.save-btn {
+  color: #28a745;
+}
+
+.save-btn:hover {
+  background-color: rgba(40, 167, 69, 0.2);
+}
+
+.cancel-btn {
+  color: #dc3545;
+}
+
+.cancel-btn:hover {
+  background-color: rgba(220, 53, 69, 0.2);
+}

@@ -1,0 +1,10 @@
+:root {
+  --color-primary: #b07445;
+  --color-secondary: #c88d5c;
+
+  --color-bg: #000000;
+  --color-text: #ffffff;
+  --color-text-soft: #ededed;
+
+  --color-border: rgba(255, 255, 255, 0.15);
+}

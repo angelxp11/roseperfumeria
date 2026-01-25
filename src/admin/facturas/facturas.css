@@ -1,0 +1,311 @@
+@import '../../resources/colors/colors.css';
+
+.rf-facturas-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.rf-facturas-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rf-facturas-icon {
+  font-size: 1.75rem;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.rf-facturas-header h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1.5rem;
+}
+
+/* Filters */
+.rf-facturas-filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.rf-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 200px;
+  position: relative;
+}
+
+.rf-filter-icon {
+  color: var(--color-secondary);
+  font-size: 1.1rem;
+  pointer-events: none;
+  position: absolute;
+  left: 10px;
+}
+
+.rf-filter-input {
+  width: 100%;
+  padding: 10px 16px 10px 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #181818;
+  color: var(--color-text);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.rf-filter-input:focus {
+  border-color: var(--color-primary);
+}
+
+.rf-filter-date {
+  padding: 10px 12px;
+  padding-left: 12px;
+}
+
+.rf-btn-limpiar {
+  background: #666;
+  color: var(--color-text);
+  border: none;
+  border-radius: 6px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.rf-btn-limpiar:hover {
+  background: #555;
+}
+
+.rf-btn-limpiar svg {
+  font-size: 1.2rem;
+}
+
+/* Facturas List */
+.rf-facturas-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: calc(100vh - 350px);
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.rf-loading-text,
+.rf-no-results {
+  color: var(--color-secondary);
+  text-align: center;
+  padding: 40px;
+  font-size: 1.1rem;
+}
+
+/* Factura Card */
+.rf-factura-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 18px;
+  transition: all 0.2s;
+}
+
+.rf-factura-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.rf-factura-header-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.rf-factura-id-fecha {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rf-factura-id {
+  margin: 0;
+  color: var(--color-primary);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.rf-factura-fecha {
+  margin: 0;
+  color: var(--color-secondary);
+  font-size: 0.9rem;
+}
+
+.rf-factura-total {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rf-total-label {
+  color: var(--color-secondary);
+  font-weight: 500;
+}
+
+.rf-total-amount {
+  color: var(--color-primary);
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+/* Productos */
+.rf-factura-productos {
+  margin-bottom: 16px;
+}
+
+.rf-factura-productos h4 {
+  margin: 0 0 10px 0;
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+.rf-productos-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.rf-productos-table thead {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.rf-productos-table th {
+  padding: 8px;
+  text-align: left;
+  color: var(--color-secondary);
+  font-weight: 600;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.rf-productos-table td {
+  padding: 8px;
+  color: var(--color-text);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.rf-productos-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.rf-no-data {
+  text-align: center;
+  color: var(--color-secondary);
+}
+
+/* Método de Pago */
+.rf-factura-metodo {
+  margin-bottom: 12px;
+}
+
+.rf-factura-metodo h4 {
+  margin: 0 0 8px 0;
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+.rf-metodo-content {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rf-metodo-item {
+  background: rgba(176, 116, 69, 0.15);
+  color: var(--color-primary);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  border: 1px solid rgba(176, 116, 69, 0.3);
+}
+
+/* Status */
+.rf-factura-status {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rf-status-badge {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.rf-status-completada {
+  background: rgba(39, 174, 96, 0.2);
+  color: #27ae60;
+  border: 1px solid rgba(39, 174, 96, 0.4);
+}
+
+/* Scrollbar */
+.rf-facturas-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.rf-facturas-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.rf-facturas-list::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border-radius: 3px;
+}
+
+.rf-facturas-list::-webkit-scrollbar-thumb:hover {
+  background: var(--color-secondary);
+}
+
+@media (max-width: 768px) {
+  .rf-facturas-filters {
+    flex-direction: column;
+  }
+
+  .rf-filter-group {
+    min-width: 100%;
+  }
+
+  .rf-factura-header-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .rf-productos-table {
+    font-size: 0.8rem;
+  }
+
+  .rf-productos-table th,
+  .rf-productos-table td {
+    padding: 6px;
+  }
+}

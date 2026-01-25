@@ -1,0 +1,238 @@
+@import '../../resources/colors/colors.css';
+
+.flujo-container-main {
+  width: 100%;
+}
+
+.flujo-header-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.flujo-header-icon-main {
+  font-size: 2.2rem;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.flujo-header-main h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1.5rem;
+}
+
+.flujo-buttons-main {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+
+.flujo-buttons-main button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--color-primary);
+  color: var(--color-text);
+  border: none;
+  border-radius: 8px;
+  padding: 14px 24px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.flujo-buttons-main button:hover:not(:disabled) {
+  background: var(--color-secondary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.flujo-buttons-main button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.flujo-buttons-main button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.flujo-btn-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.flujo-btn-ingreso {
+  background: #27ae60 !important;
+}
+
+.flujo-btn-ingreso:hover:not(:disabled) {
+  background: #229954 !important;
+}
+
+.flujo-btn-retiro {
+  background: #e74c3c !important;
+}
+
+.flujo-btn-retiro:hover:not(:disabled) {
+  background: #c0392b !important;
+}
+
+.flujo-btn-transfer {
+  background: var(--color-primary) !important;
+}
+
+.flujo-btn-transfer:hover:not(:disabled) {
+  background: var(--color-secondary) !important;
+}
+
+/* Modal Styles */
+.flujo-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: flujoFadeIn 0.2s ease;
+}
+
+@keyframes flujoFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.flujo-modal {
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-radius: 12px;
+  padding: 32px 24px 24px 24px;
+  min-width: 320px;
+  max-width: 400px;
+  box-shadow: 0 4px 32px 0 rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--color-border);
+  animation: flujoSlideUp 0.3s ease;
+}
+
+@keyframes flujoSlideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.flujo-modal h3 {
+  margin-top: 0;
+  margin-bottom: 18px;
+  color: var(--color-primary);
+  font-size: 1.25rem;
+}
+
+.flujo-modal > div {
+  margin-bottom: 14px;
+}
+
+.flujo-modal label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--color-secondary);
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.flujo-modal input[type="text"],
+.flujo-modal select,
+.flujo-modal textarea {
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 0;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: #181818;
+  color: var(--color-text);
+  font-size: 1rem;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+
+.flujo-modal input[type="text"]:focus,
+.flujo-modal select:focus,
+.flujo-modal textarea:focus {
+  border-color: var(--color-primary);
+}
+
+.flujo-modal textarea {
+  resize: vertical;
+  min-height: 50px;
+  max-height: 120px;
+}
+
+.flujo-modal-buttons {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.flujo-modal button {
+  background: var(--color-primary);
+  color: var(--color-text);
+  border: none;
+  border-radius: 6px;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.flujo-modal button:first-child {
+  background: #666;
+}
+
+.flujo-modal button:first-child:hover:not(:disabled) {
+  background: #555;
+}
+
+.flujo-modal button:hover:not(:disabled) {
+  background: var(--color-secondary);
+  transform: translateY(-1px);
+}
+
+.flujo-modal button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 500px) {
+  .flujo-buttons-main {
+    flex-direction: column;
+  }
+
+  .flujo-buttons-main button {
+    width: 100%;
+  }
+
+  .flujo-modal {
+    padding: 18px 16px 16px 16px;
+    min-width: 90vw;
+    max-width: 98vw;
+    margin: 0 8px;
+  }
+}

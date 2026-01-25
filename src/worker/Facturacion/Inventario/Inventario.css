@@ -1,0 +1,361 @@
+.right-panel {
+  flex: 0 0 25%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+}
+
+.categorias-container {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 15px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  border: 2px solid #ddd;
+}
+
+.categorias-container h3 {
+  margin: 0 0 15px 0;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.tabs-container {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 15px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.tab-button {
+  padding: 8px 16px;
+  background: var(--color-bg);
+  border: 2px solid var(--color-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--color-primary);
+  transition: all 0.3s;
+}
+
+.tab-button:hover {
+  background: var(--color-primary);
+  color: white;
+}
+
+.tab-button.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.categorias-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.productos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.producto-card {
+  background: #1a1a1a;
+  border: 2px solid #ddd;
+  border-radius: 12px;
+  padding: 16px 12px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  user-select: none;
+}
+
+.producto-card:hover {
+  border: 2px solid var(--color-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.producto-card *,
+.producto-card *:before,
+.producto-card *:after {
+  user-select: none;
+}
+
+.producto-icono {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 70px;
+  height: 70px;
+  margin-bottom: 12px;
+  color: var(--color-primary);
+  font-size: 0;
+}
+
+.producto-icono svg {
+  width: 50px;
+  height: 50px;
+}
+
+.producto-info {
+  text-align: center;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.producto-nombre {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  line-height: 1.3;
+  min-height: 22px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+}
+
+.producto-precio {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.producto-formula {
+  display: inline-block;
+  font-size: 8px;
+  background: var(--color-primary);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+/* Search Styles */
+.search-container-worker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 15px 0;
+}
+
+.search-icon-worker {
+  position: absolute;
+  left: 12px;
+  color: #aaa;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.search-input-worker {
+  width: 100%;
+  padding: 10px 12px 10px 36px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 13px;
+  transition: all 0.3s ease;
+}
+
+.search-input-worker::placeholder {
+  color: #999;
+}
+
+.search-input-worker:focus {
+  outline: none;
+  border-color: #b07445;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.clear-search-worker {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.3s ease;
+  font-size: 14px;
+}
+
+.clear-search-worker:hover {
+  color: #fff;
+}
+
+/* Responsive Design */
+@media (max-width: 1400px) {
+  .right-panel {
+    flex: 0 0 28%;
+  }
+
+  .productos-grid {
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 10px;
+  }
+
+  .producto-icono {
+    width: 60px;
+    height: 60px;
+    margin-bottom: 10px;
+  }
+
+  .producto-icono svg {
+    width: 45px;
+    height: 45px;
+  }
+
+  .producto-nombre {
+    font-size: 10px;
+  }
+
+  .producto-precio {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .right-panel {
+    flex: 0 0 auto;
+    min-height: 300px;
+  }
+
+  .categorias-container {
+    min-height: 250px;
+  }
+
+  .productos-grid {
+    grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+    gap: 10px;
+  }
+
+  .producto-icono {
+    width: 55px;
+    height: 55px;
+    margin-bottom: 8px;
+  }
+
+  .producto-icono svg {
+    width: 40px;
+    height: 40px;
+  }
+
+  .producto-nombre {
+    font-size: 9px;
+    min-height: 20px;
+  }
+
+  .producto-precio {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 768px) {
+  .tabs-container {
+    gap: 6px;
+  }
+
+  .tab-button {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+
+  .productos-grid {
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .producto-card {
+    padding: 12px 10px 10px 10px;
+  }
+
+  .producto-icono {
+    width: 50px;
+    height: 50px;
+    margin-bottom: 8px;
+  }
+
+  .producto-icono svg {
+    width: 35px;
+    height: 35px;
+  }
+
+  .producto-nombre {
+    font-size: 9px;
+    min-height: 20px;
+  }
+
+  .producto-precio {
+    font-size: 11px;
+  }
+
+  .producto-formula {
+    font-size: 7px;
+    padding: 2px 5px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tab-button {
+    padding: 5px 10px;
+    font-size: 10px;
+  }
+
+  .productos-grid {
+    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .producto-card {
+    padding: 10px 8px 8px 8px;
+  }
+
+  .producto-icono {
+    width: 45px;
+    height: 45px;
+    margin-bottom: 6px;
+  }
+
+  .producto-icono svg {
+    width: 30px;
+    height: 30px;
+  }
+
+  .producto-nombre {
+    font-size: 8px;
+    min-height: 18px;
+  }
+
+  .producto-precio {
+    font-size: 10px;
+  }
+
+  .producto-formula {
+    font-size: 6px;
+    padding: 1px 4px;
+  }
+}

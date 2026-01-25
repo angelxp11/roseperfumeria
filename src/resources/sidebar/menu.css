@@ -1,0 +1,84 @@
+/* menu base */
+.menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: 70px;
+  background: #111;
+  overflow: hidden;
+  transition: width 0.3s ease;
+  z-index: 1000;
+}
+
+/* Al hacer hover se despliega */
+.menu:hover {
+  width: 240px;
+}
+
+/* Logo */
+.menu-logo {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.menu-logo img {
+  width: 40px;
+  transition: width 0.3s ease;
+  mix-blend-mode: screen; /* mantiene dorado */
+}
+
+.menu:hover .menu-logo img {
+  width: 120px;
+}
+
+/* Menú */
+.menu-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 20px;
+}
+
+/* Botones */
+.menu-menu button {
+  background: none;
+  border: 1px solid transparent;
+  color: #e3b04b;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  transition: all 0.3s ease;
+}
+
+/* Iconos react-icons */
+.menu-menu .icon {
+  font-size: 20px;
+  min-width: 20px;
+}
+
+/* Label oculto */
+.menu-menu .label {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  transition: opacity 0.2s ease;
+}
+
+/* Label visible al hover */
+.menu:hover .menu-menu .label {
+  opacity: 1;
+  width: auto;
+}
+
+/* Hover botón */
+.menu-menu button:hover {
+  background: #e3b04b;
+  color: #111;
+}

@@ -1,0 +1,10 @@
+@font-face {
+  font-family: 'Calibri';
+  src: local('Calibri');
+  font-weight: normal;
+  font-style: normal;
+}
+
+body {
+  font-family: 'Calibri', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+}
