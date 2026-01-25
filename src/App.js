@@ -60,15 +60,7 @@ function App() {
       {renderContent()}
 
       {/* 🔔 Toast GLOBAL */}
-      <ToastContainer
-        position="top-right"
-        autoClose={3000}
-        newestOnTop
-        closeOnClick
-        pauseOnHover
-        draggable
-        style={{ zIndex: 10001 }}
-      />
+      
     </>
   );
 }
