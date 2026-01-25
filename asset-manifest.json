@@ -1,0 +1,22 @@
+{
+  "files": {
+    "main.css": "/rose_perfumeria/static/css/main.76034eed.css",
+    "main.js": "/rose_perfumeria/static/js/main.f3d30caf.js",
+    "static/js/239.b70782a0.chunk.js": "/rose_perfumeria/static/js/239.b70782a0.chunk.js",
+    "static/js/977.2873d5bf.chunk.js": "/rose_perfumeria/static/js/977.2873d5bf.chunk.js",
+    "static/js/455.46e40677.chunk.js": "/rose_perfumeria/static/js/455.46e40677.chunk.js",
+    "static/js/453.8dac180b.chunk.js": "/rose_perfumeria/static/js/453.8dac180b.chunk.js",
+    "static/media/logo512.png": "/rose_perfumeria/static/media/logo512.4f88a2e5642ecff499a5.png",
+    "index.html": "/rose_perfumeria/index.html",
+    "main.76034eed.css.map": "/rose_perfumeria/static/css/main.76034eed.css.map",
+    "main.f3d30caf.js.map": "/rose_perfumeria/static/js/main.f3d30caf.js.map",
+    "239.b70782a0.chunk.js.map": "/rose_perfumeria/static/js/239.b70782a0.chunk.js.map",
+    "977.2873d5bf.chunk.js.map": "/rose_perfumeria/static/js/977.2873d5bf.chunk.js.map",
+    "455.46e40677.chunk.js.map": "/rose_perfumeria/static/js/455.46e40677.chunk.js.map",
+    "453.8dac180b.chunk.js.map": "/rose_perfumeria/static/js/453.8dac180b.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.76034eed.css",
+    "static/js/main.f3d30caf.js"
+  ]
+}
