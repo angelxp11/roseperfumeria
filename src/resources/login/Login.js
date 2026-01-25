@@ -72,7 +72,14 @@ export default function Login() {
       // ⏰ Guardar expiración a medianoche
       localStorage.setItem('userExpiration', getMidnightTimestamp());
 
-      toast.success('Sesión iniciada correctamente');
+      // Evitar toasts duplicados y asegurar autoClose
+      toast.dismiss();
+      toast.success('Sesión iniciada correctamente', {
+        toastId: 'login-success',
+        autoClose: 3000,
+        closeOnClick: true,
+        pauseOnHover: true,
+      });
 
       // 🧭 Redirección por rol (GitHub Pages SAFE)
       setTimeout(() => {
@@ -102,7 +109,8 @@ export default function Login() {
 
   return (
     <div className="login-container">
-      <ToastContainer position="top-right" />
+      {/* Ajuste: autoClose y limit para manejar toasts */}
+      <ToastContainer position="top-right" autoClose={3000} limit={3} />
       <form className="login-card" onSubmit={handleSubmit}>
         <h2>Iniciar sesión</h2>
 
