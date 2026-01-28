@@ -341,7 +341,7 @@ export default function Flujo() {
                 {paymentMethods.map(m => (
                   <option key={m.id} value={m.name}>{m.name} (${formatNumber(cajaBalances[m.name] ?? 0)})</option>
                 ))}
-              </select>
+              </select> 
             </div>
             <div>
               <label>Valor:</label>

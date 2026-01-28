@@ -9,6 +9,8 @@ import AdminInventario from '../inventario/inventario';
 import AdminEmpleados from '../empleados/AdminEmpleados';
 import AdminWallet from '../wallet/AdminWallet';
 import Facturas from '../facturas/facturas';
+import AdminFormulas from '../formulas/AdminFormulas';
+import AdminEsencias from '../esencias/AdminEsencias';
 import './homepage.css';
 
 export default function AdminHomepage() {
@@ -86,6 +88,14 @@ export default function AdminHomepage() {
 
         {section === 'inventario' && (
           <AdminInventario />
+        )}
+
+        {section === 'formulas' && (
+          <AdminFormulas />
+        )}
+
+        {section === 'esencias' && (
+          <AdminEsencias />
         )}
 
         {section === 'empleados' && (

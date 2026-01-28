@@ -1,9 +1,28 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, increment, setDoc } from 'firebase/firestore';
 import { db } from '../../server/firebase';
-import { FaSearch, FaTimes, FaFileInvoice } from 'react-icons/fa';
+import { getAuth } from 'firebase/auth';
+import { FaSearch, FaTimes, FaFileInvoice, FaTrash } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import './facturas.css';
+
+async function obtenerNombreEmpleado() {
+  try {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user?.email) return 'N/A';
+    const emailLower = user.email.toLowerCase();
+    const snap = await getDocs(collection(db, 'EMPLEADOS'));
+    for (const docu of snap.docs) {
+      if (docu.data().email?.toLowerCase() === emailLower) {
+        return docu.data().nombre || 'N/A';
+      }
+    }
+    return 'N/A';
+  } catch {
+    return 'N/A';
+  }
+}
 
 export default function Facturas() {
   const [facturas, setFacturas] = useState([]);
@@ -11,20 +30,34 @@ export default function Facturas() {
   const [loading, setLoading] = useState(false);
   const [searchId, setSearchId] = useState('');
   const [searchFecha, setSearchFecha] = useState('');
+  const [searchMetodoPago, setSearchMetodoPago] = useState('');
+  const [metodosDisponibles, setMetodosDisponibles] = useState([]);
+  const [modalCancelar, setModalCancelar] = useState(false);
+  const [facturaCancelar, setFacturaCancelar] = useState(null);
+  const [motivoCancelacion, setMotivoCancelacion] = useState('');
+  const [cancelando, setCancelando] = useState(false);
+  const [usuarioActual, setUsuarioActual] = useState('Admin');
 
   useEffect(() => {
     cargarFacturas();
+    cargarNombreUsuario();
   }, []);
 
   useEffect(() => {
     filtrarFacturas();
-  }, [searchId, searchFecha, facturas]);
+  }, [searchId, searchFecha, searchMetodoPago, facturas]);
+
+  const cargarNombreUsuario = async () => {
+    const nombre = await obtenerNombreEmpleado();
+    setUsuarioActual(nombre);
+  };
 
   const cargarFacturas = async () => {
     try {
       setLoading(true);
       const snap = await getDocs(collection(db, 'FACTURAS'));
       const facturasArray = [];
+      const metodosSet = new Set();
 
       for (const docSnap of snap.docs) {
         const fecha = docSnap.id; // dd_mm_yyyy
@@ -38,6 +71,17 @@ export default function Facturas() {
             fecha,
             ...facturaData
           });
+
+          // Extraer métodos de pago disponibles
+          if (facturaData.metodo_pago) {
+            if (Array.isArray(facturaData.metodo_pago)) {
+              facturaData.metodo_pago.forEach(m => metodosSet.add(m.metodo));
+            } else if (typeof facturaData.metodo_pago === 'object') {
+              metodosSet.add(facturaData.metodo_pago.metodo || 'N/A');
+            } else {
+              metodosSet.add(facturaData.metodo_pago);
+            }
+          }
         }
       }
 
@@ -50,6 +94,7 @@ export default function Facturas() {
 
       setFacturas(facturasArray);
       setFacturasFiltradas(facturasArray);
+      setMetodosDisponibles(Array.from(metodosSet).sort());
     } catch (err) {
       console.error('Error al cargar facturas:', err);
       toast.error('Error al cargar facturas');
@@ -85,6 +130,83 @@ export default function Facturas() {
   const formatNumber = (val) =>
     new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(Number(val) || 0);
 
+  const fechaHoyId = () => {
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}_${mm}_${yyyy}`;
+  };
+
+  const obtenerNombreMetodo = (metodo) => {
+    // Función auxiliar para normalizar nombre de método
+    if (typeof metodo === 'string') {
+      const normalizado = metodo.toLowerCase();
+      if (normalizado.includes('nequi')) return 'NEQUI';
+      if (normalizado.includes('bancolombia')) return 'BANCOLOMBIA';
+      if (normalizado.includes('efectivo')) return 'EFECTIVO';
+      if (normalizado.includes('tarjeta')) return 'TARJETA';
+      return metodo.toUpperCase();
+    }
+    return 'DESCONOCIDO';
+  };
+
+  const decrementarCaja = async (metodos, monto) => {
+    try {
+      const id = fechaHoyId();
+      const docRef = doc(db, 'CAJAS', id);
+
+      // Si metodos es un array, decrementar cada uno proporcionalmente
+      if (Array.isArray(metodos)) {
+        const updateObj = {};
+        metodos.forEach(m => {
+          const nombreMetodo = obtenerNombreMetodo(m.metodo);
+          updateObj[`APERTURA.${nombreMetodo}`] = increment(-Number(m.monto || 0));
+        });
+        await updateDoc(docRef, updateObj);
+      } else {
+        // Si es un objeto único
+        const nombreMetodo = obtenerNombreMetodo(metodos.metodo || metodos);
+        await updateDoc(docRef, {
+          [`APERTURA.${nombreMetodo}`]: increment(-monto)
+        });
+      }
+    } catch (err) {
+      console.error('Error al decrementar caja:', err);
+      // No lanzar error, solo registrar
+    }
+  };
+
+  const registrarMovimiento = async (facturaId, motivo, monto) => {
+    try {
+      const movimientoId = String(Date.now());
+      const fechaHoy = fechaHoyId();
+      const movimientosRef = doc(db, 'MOVIMIENTOS', fechaHoy);
+
+      const movimiento = {
+        id: movimientoId,
+        tipo: 'CANCELACION',
+        factura_id: facturaId,
+        usuario: usuarioActual,
+        motivo: motivo,
+        monto: monto,
+        fecha: new Date().toISOString(),
+        descripcion: `La factura #${facturaId} fue cancelada por ${usuarioActual}`
+      };
+
+      await setDoc(
+        movimientosRef,
+        {
+          [movimientoId]: movimiento
+        },
+        { merge: true }
+      );
+    } catch (err) {
+      console.error('Error al registrar movimiento:', err);
+      // No lanzar error, solo registrar en consola
+    }
+  };
+
   const filtrarFacturas = () => {
     let resultado = [...facturas];
 
@@ -110,12 +232,87 @@ export default function Facturas() {
       });
     }
 
+    // Filtrar por método de pago
+    if (searchMetodoPago.trim()) {
+      resultado = resultado.filter(f => {
+        if (Array.isArray(f.metodo_pago)) {
+          return f.metodo_pago.some(m => m.metodo === searchMetodoPago);
+        } else if (typeof f.metodo_pago === 'object') {
+          return f.metodo_pago.metodo === searchMetodoPago;
+        }
+        return f.metodo_pago === searchMetodoPago;
+      });
+    }
+
     setFacturasFiltradas(resultado);
   };
 
   const limpiarBusqueda = () => {
     setSearchId('');
     setSearchFecha('');
+    setSearchMetodoPago('');
+  };
+
+  const abrirModalCancelar = (factura) => {
+    if (factura.estado === 'CANCELADA') {
+      toast.warning('Esta factura ya está cancelada');
+      return;
+    }
+    setFacturaCancelar(factura);
+    setMotivoCancelacion('');
+    setModalCancelar(true);
+  };
+
+  const cancelarFactura = async () => {
+    if (!motivoCancelacion.trim()) {
+      toast.warning('Debes ingresar un motivo de cancelación');
+      return;
+    }
+
+    try {
+      setCancelando(true);
+      const docRef = doc(db, 'FACTURAS', facturaCancelar.documentId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const montoTotal = data[facturaCancelar.facturaId].total || 0;
+        const metodoPago = data[facturaCancelar.facturaId].metodo_pago;
+
+        const facturaActualizada = {
+          ...data[facturaCancelar.facturaId],
+          estado: 'CANCELADA',
+          motivo_cancelacion: motivoCancelacion,
+          fecha_cancelacion: new Date().toISOString(),
+          devolucion_monto: montoTotal
+        };
+
+        const nuevosData = {
+          ...data,
+          [facturaCancelar.facturaId]: facturaActualizada
+        };
+
+        // Actualizar factura
+        await updateDoc(docRef, nuevosData);
+
+        // Decrementar dinero de la caja según método de pago
+        if (metodoPago) {
+          await decrementarCaja(metodoPago, montoTotal);
+        }
+
+        // Registrar movimiento
+        await registrarMovimiento(facturaCancelar.facturaId, motivoCancelacion, montoTotal);
+        
+        toast.success(`Factura #${facturaCancelar.facturaId} cancelada. Dinero devuelto: $${formatNumber(montoTotal)}`);
+        setModalCancelar(false);
+        cargarFacturas();
+      }
+    } catch (err) {
+      console.error('Error al cancelar factura:', err);
+      toast.error('Error al cancelar factura');
+    } finally {
+      setCancelando(false);
+    }
   };
 
   return (
@@ -146,7 +343,22 @@ export default function Facturas() {
           />
         </div>
 
-        {(searchId || searchFecha) && (
+        <div className="rf-filter-group">
+          <select
+            value={searchMetodoPago}
+            onChange={(e) => setSearchMetodoPago(e.target.value)}
+            className="rf-filter-input rf-filter-select"
+          >
+            <option value="">Todos los métodos de pago</option>
+            {metodosDisponibles.map((metodo) => (
+              <option key={metodo} value={metodo}>
+                {metodo}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {(searchId || searchFecha || searchMetodoPago) && (
           <button className="rf-btn-limpiar" onClick={limpiarBusqueda}>
             <FaTimes />
           </button>
@@ -233,11 +445,62 @@ export default function Facturas() {
                 <span className={`rf-status-badge rf-status-${(factura.estado || 'COMPLETADA').toLowerCase()}`}>
                   {factura.estado || 'COMPLETADA'}
                 </span>
+                {factura.motivo_cancelacion && (
+                  <div className="rf-motivo-cancelacion">
+                    <p><strong>Motivo:</strong> {factura.motivo_cancelacion}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="rf-factura-actions">
+                <button 
+                  className="rf-btn-cancelar"
+                  onClick={() => abrirModalCancelar(factura)}
+                  disabled={factura.estado === 'CANCELADA'}
+                >
+                  <FaTrash /> Cancelar Factura
+                </button>
               </div>
             </div>
           ))
         )}
       </div>
+
+      {modalCancelar && (
+        <div className="rf-modal-overlay">
+          <div className="rf-modal-content">
+            <h3>Cancelar Factura #{facturaCancelar?.facturaId}</h3>
+            <p className="rf-modal-info">
+              Total a devolver: <strong>${formatNumber(facturaCancelar?.total)}</strong>
+            </p>
+            
+            <textarea
+              placeholder="¿Cuál es el motivo de la cancelación?"
+              value={motivoCancelacion}
+              onChange={(e) => setMotivoCancelacion(e.target.value)}
+              className="rf-modal-textarea"
+              rows="4"
+            />
+
+            <div className="rf-modal-actions">
+              <button 
+                className="rf-btn-confirmar"
+                onClick={cancelarFactura}
+                disabled={cancelando || !motivoCancelacion.trim()}
+              >
+                {cancelando ? 'Procesando...' : 'Confirmar Cancelación'}
+              </button>
+              <button 
+                className="rf-btn-cerrar"
+                onClick={() => setModalCancelar(false)}
+                disabled={cancelando}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

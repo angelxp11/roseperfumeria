@@ -1,13 +1,13 @@
 @import '../../resources/colors/colors.css';
 
-.inventario-container {
+.formulas-container {
   padding: 20px;
   background-color: var(--color-bg);
   border-radius: 8px;
   min-height: 600px;
 }
 
-.inventario-header {
+.formulas-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -16,13 +16,13 @@
   gap: 15px;
 }
 
-.inventario-header h2 {
+.formulas-header h2 {
   margin: 0;
   color: var(--color-text);
   font-size: 24px;
 }
 
-.inventario-actions {
+.formulas-actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
@@ -73,51 +73,25 @@
   font-size: 16px;
 }
 
-.productos-tabla {
+.formulas-tabla {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  max-height: 600px;
-  position: relative;
 }
 
-.productos-tabla::-webkit-scrollbar {
-  height: 8px;
-  width: 8px;
-}
-
-.productos-tabla::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 10px;
-}
-
-.productos-tabla::-webkit-scrollbar-thumb {
-  background: rgba(176, 116, 69, 0.4);
-  border-radius: 10px;
-}
-
-.productos-tabla::-webkit-scrollbar-thumb:hover {
-  background: rgba(176, 116, 69, 0.6);
-}
-
-.productos-tabla table {
+.formulas-tabla table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 600px;
 }
 
-.productos-tabla thead {
+.formulas-tabla thead {
   background-color: rgba(176, 116, 69, 0.2);
   border-bottom: 2px solid var(--color-border);
-  position: sticky;
-  top: 0;
-  z-index: 10;
 }
 
-.productos-tabla th {
+.formulas-tabla th {
   padding: 15px;
   text-align: left;
   font-weight: 600;
@@ -125,20 +99,20 @@
   font-size: 14px;
 }
 
-.productos-tabla th:first-child,
-.productos-tabla td:first-child {
+.formulas-tabla th:first-child,
+.formulas-tabla td:first-child {
   font-family: 'Courier New', monospace;
   font-weight: 600;
   letter-spacing: 0.5px;
 }
 
-.productos-tabla td {
+.formulas-tabla td {
   padding: 15px;
   border-bottom: 1px solid var(--color-border);
   color: var(--color-text-soft);
 }
 
-.productos-tabla tbody tr:hover {
+.formulas-tabla tbody tr:hover {
   background-color: rgba(176, 116, 69, 0.1);
 }
 
@@ -405,7 +379,7 @@
   flex: 1;
 }
 
-.inventario-search {
+.formulas-search {
   margin-bottom: 20px;
 }
 
@@ -474,239 +448,25 @@
   color: var(--color-primary);
 }
 
-/* Checkbox Styles */
-.formula-toggle-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  margin-bottom: 8px;
-  color: var(--color-text);
-  font-weight: 500;
-  user-select: none;
-}
-
-.formula-checkbox {
-  width: 20px;
-  height: 20px;
-  min-width: 20px;
-  cursor: pointer;
-  accent-color: var(--color-primary);
-}
-
-.formula-checkbox:hover {
-  opacity: 0.8;
-}
-
-.formula-checkbox:focus {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-/* Selected Formulas Tags */
-.selected-formulas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding: 10px;
-  background-color: rgba(176, 116, 69, 0.1);
-  border-radius: 4px;
-}
-
-.formula-tag {
-  background-color: rgba(176, 116, 69, 0.3);
-  padding: 6px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--color-text);
-}
-
-.formula-tag-remove {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  font-size: 14px;
-  color: inherit;
-  opacity: 0.7;
-  transition: opacity 0.3s ease;
-}
-
-.formula-tag-remove:hover {
-  opacity: 1;
-}
-
-/* Formulas Dropdown Styles - Updated */
-.formulas-list {
-  margin-top: 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background-color: rgba(255, 255, 255, 0.03);
-  overflow: hidden;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-/* Scrollbar custom para WebKit y reglas para Firefox - aplicar a contenedores con overflow */
-.formulas-list::-webkit-scrollbar,
-.productos-tabla::-webkit-scrollbar,
-.formato-tabla::-webkit-scrollbar,
-.modal::-webkit-scrollbar,
-.modal-import::-webkit-scrollbar {
-  width: 10px;
-  height: 8px;
-}
-
-.formulas-list::-webkit-scrollbar-track,
-.productos-tabla::-webkit-scrollbar-track,
-.formato-tabla::-webkit-scrollbar-track,
-.modal::-webkit-scrollbar-track,
-.modal-import::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 10px;
-}
-
-.formulas-list::-webkit-scrollbar-thumb,
-.productos-tabla::-webkit-scrollbar-thumb,
-.formato-tabla::-webkit-scrollbar-thumb,
-.modal::-webkit-scrollbar-thumb,
-.modal-import::-webkit-scrollbar-thumb {
-  background: rgba(176, 116, 69, 0.4);
-  border-radius: 10px;
-  border: 2px solid rgba(255, 255, 255, 0.03);
-}
-
-.formulas-list::-webkit-scrollbar-thumb:hover,
-.productos-tabla::-webkit-scrollbar-thumb:hover,
-.formato-tabla::-webkit-scrollbar-thumb:hover,
-.modal::-webkit-scrollbar-thumb:hover,
-.modal-import::-webkit-scrollbar-thumb:hover {
-  background: rgba(176, 116, 69, 0.6);
-}
-
-/* Firefox */
-.formulas-list,
-.productos-tabla,
-.formato-tabla,
-.modal,
-.modal-import {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(176, 116, 69, 0.4) rgba(255, 255, 255, 0.03);
-}
-
-/* Select de esencias: forzar fondo negro y texto claro, y aplicar a las opciones */
-select[name="idEsencia"] {
-  background-color: #000 !important;
-  color: var(--color-text) !important;
-  border-color: var(--color-border);
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-/* Asegurar que las opciones del select también sean negras con texto claro */
-select[name="idEsencia"] option {
-  background-color: #000;
-  color: var(--color-text);
-}
-
-/* Evitar que estilos generales de .form-group select sobrescriban al select específico */
-
-
-.formula-button {
-  width: 100%;
-  background: rgba(176, 116, 69, 0.05);
-  border: 1px solid rgba(176, 116, 69, 0.2);
-  border-radius: 6px;
-  padding: 12px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.formula-button:hover {
-  background-color: rgba(176, 116, 69, 0.15);
-  border-color: var(--color-primary);
-  transform: translateX(4px);
-}
-
-.formula-button.selected {
-  background-color: rgba(176, 116, 69, 0.2);
-  border-color: var(--color-primary);
-}
-
-.formula-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.formula-header strong {
-  color: var(--color-primary);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.formula-header span {
-  color: var(--color-primary);
-  font-size: 16px;
-  font-weight: bold;
-}
-
-.formula-details {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.formula-details span {
-  color: var(--color-text-soft);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.formulas-loading {
-  padding: 12px;
-  color: var(--color-text-soft);
-  text-align: center;
-  font-size: 13px;
-}
-
-.formulas-empty {
-  padding: 12px;
-  color: var(--color-text-soft);
-  text-align: center;
-  font-size: 13px;
-  font-style: italic;
-}
-
 /* Responsive */
 @media (max-width: 768px) {
-  .inventario-header {
+  .formulas-header {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .inventario-actions {
+  .formulas-actions {
     width: 100%;
     flex-direction: column;
   }
 
-  .inventario-actions button,
-  .inventario-actions label {
+  .formulas-actions button,
+  .formulas-actions label {
     width: 100%;
     justify-content: center;
   }
 
-  .productos-tabla {
+  .formulas-tabla {
     overflow-x: auto;
   }
 
@@ -736,63 +496,4 @@ select[name="idEsencia"] option {
   .import-actions .btn {
     width: 100%;
   }
-}
-/* ===== Toggle moderno ===== */
-.formula-toggle {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-  user-select: none;
-  margin-bottom: 10px; /* 👈 separación con lo de abajo */
-}
-
-
-.formula-toggle input {
-  appearance: none;
-  width: 20px;
-  height: 20px;
-  min-width: 20px;
-  border: 2px solid var(--color-primary);
-  border-radius: 6px;
-  background-color: rgba(255, 255, 255, 0.05);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.formula-toggle input:hover {
-  background-color: rgba(176, 116, 69, 0.2);
-  border-color: var(--color-secondary);
-}
-
-.formula-toggle input:checked {
-  background-color: var(--color-primary);
-  border-color: var(--color-primary);
-}
-
-.formula-toggle input:checked::after {
-  content: '✓';
-  color: var(--color-bg);
-  font-weight: bold;
-  font-size: 14px;
-}
-
-.formula-toggle input:focus {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-/* Texto */
-.toggle-text {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text);
-}
-
-/* Slider - remove old styles */
-.toggle-slider {
-  display: none;
 }

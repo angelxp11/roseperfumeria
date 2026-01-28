@@ -62,6 +62,7 @@ export default function Inventario({ onAgregarAlCarrito }) {
         stock: doc.data().stock,
         price: Number(doc.data().price) || 0,
         idFormula: doc.data().idFormula || null,
+        idEsencia: doc.data().idEsencia || null,
         tieneFormula: !!doc.data().idFormula
       }));
       
@@ -128,7 +129,10 @@ export default function Inventario({ onAgregarAlCarrito }) {
         documentId: producto.documentId,
         id: producto.id,
         name: producto.name,
+        category: producto.category,
         price: producto.price,
+        idFormula: producto.idFormula,
+        idEsencia: producto.idEsencia,
         cantidad: 1
       });
     }

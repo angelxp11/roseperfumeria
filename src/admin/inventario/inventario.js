@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, deleteField } from 'firebase/firestore';
 import { db } from '../../server/firebase';
 import { toast } from 'react-toastify';
 import * as XLSX from 'xlsx';
@@ -20,9 +20,16 @@ export default function AdminInventario() {
     category: '',
     stock: '',
     price: '',
-    idFormula: ''
+    idFormulas: [],
+    idEsencia: '',
+    formulasPrices: {} // NUEVO: guardar precios por fórmula
   });
   const [categorias, setCategorias] = useState([]);
+  const [formulas, setFormulas] = useState([]);
+  const [esencias, setEsencias] = useState([]);
+  const [showFormulas, setShowFormulas] = useState(false);
+  const [loadingFormulas, setLoadingFormulas] = useState(false);
+  const [loadingEsencias, setLoadingEsencias] = useState(false);
 
   useEffect(() => {
     cargarProductos();
@@ -54,13 +61,105 @@ export default function AdminInventario() {
     }
   };
 
+  const cargarFormulas = async () => {
+    try {
+      setLoadingFormulas(true);
+      const formulasRef = collection(db, 'FORMULAS');
+      const snapshot = await getDocs(formulasRef);
+      const frms = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      // Ordenar fórmulas ascendentemente por número
+      frms.sort((a, b) => {
+        const numA = parseInt(a.id.replace(/\D/g, '')) || 0;
+        const numB = parseInt(b.id.replace(/\D/g, '')) || 0;
+        return numA - numB;
+      });
+      setFormulas(frms);
+    } catch (err) {
+      console.error('Error al cargar fórmulas:', err);
+      toast.error('Error al cargar fórmulas');
+    } finally {
+      setLoadingFormulas(false);
+    }
+  };
+
+  const cargarEsencias = async () => {
+    try {
+      setLoadingEsencias(true);
+      const esenciasRef = collection(db, 'ESENCIA');
+      const snapshot = await getDocs(esenciasRef);
+      const esen = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      // Filtrar y excluir esencias destinadas a PRODUCCION (no deben mostrarse en el select)
+      const esenFiltradas = esen.filter(e => {
+        const genero = (e.genero || '').toString().trim().toUpperCase();
+        return genero !== 'PRODUCCION';
+      });
+      setEsencias(esen);
+      // Reemplazar por las esencias filtradas
+      setEsencias(esenFiltradas);
+    } catch (err) {
+      console.error('Error al cargar esencias:', err);
+      toast.error('Error al cargar esencias');
+    } finally {
+      setLoadingEsencias(false);
+    }
+  };
+
+  const handleToggleFormulas = async () => {
+    if (!showFormulas) {
+      // Si no está mostrando, cargar fórmulas y esencias
+      if (formulas.length === 0) {
+        await cargarFormulas();
+      }
+      if (esencias.length === 0) {
+        await cargarEsencias();
+      }
+    }
+    setShowFormulas(!showFormulas);
+  };
+
+  const handleSelectFormula = (formulaId) => {
+    setFormData(prev => {
+      const nuevasFormulas = prev.idFormulas.includes(formulaId)
+        ? prev.idFormulas.filter(id => id !== formulaId)
+        : [...prev.idFormulas, formulaId];
+      
+      // Si se deselecciona, eliminar el precio asociado
+      const nuevosPrecios = { ...prev.formulasPrices };
+      if (!nuevasFormulas.includes(formulaId)) {
+        delete nuevosPrecios[formulaId];
+      }
+      
+      return {
+        ...prev,
+        idFormulas: nuevasFormulas,
+        formulasPrices: nuevosPrecios
+      };
+    });
+  };
+
+  const handleFormulaPriceChange = (formulaId, price) => {
+    setFormData(prev => ({
+      ...prev,
+      formulasPrices: {
+        ...prev.formulasPrices,
+        [formulaId]: price
+      }
+    }));
+  };
+
   const normalizarIdBusqueda = (id) => {
     // Si es un número, lo convierte a string con 12 dígitos
     if (!isNaN(id)) {
       return parseInt(id).toString().padStart(12, '0');
     }
     // Si ya es string con formato, lo retorna
-    return id.padStart(12, '0');
+    return id.padStart(12, 0);
   };
 
   const filtrarProductos = () => {
@@ -72,12 +171,12 @@ export default function AdminInventario() {
     const busquedaLower = busqueda.toLowerCase().trim();
     
     const filtrados = productos.filter(prod => {
-      const coincideNombre = prod.name.toLowerCase().includes(busquedaLower);
+      const coincideNombre = prod.name && prod.name.toLowerCase().includes(busquedaLower);
       
       let coincideId = false;
       try {
         const idNormalizado = normalizarIdBusqueda(busquedaLower);
-        coincideId = prod.id.includes(idNormalizado);
+        coincideId = prod.id && prod.id.includes(idNormalizado);
       } catch {
         coincideId = false;
       }
@@ -115,42 +214,117 @@ export default function AdminInventario() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.category || !formData.stock || !formData.price) {
+    const tieneFormulas = formData.idFormulas && formData.idFormulas.length > 0;
+    
+    // Validación: campos obligatorios
+    if (!formData.name || !formData.category) {
       toast.error('Por favor completa todos los campos requeridos');
       return;
     }
 
+    // Si tiene fórmulas, requiere esencia y precios por fórmula
+    if (tieneFormulas) {
+      if (!formData.idEsencia) {
+        toast.error('Por favor selecciona una esencia');
+        return;
+      }
+      // Validar que todas las fórmulas tengan precio
+      for (const formulaId of formData.idFormulas) {
+        if (!formData.formulasPrices[formulaId]) {
+          toast.error(`Por favor ingresa el precio para la fórmula ${formulaId}`);
+          return;
+        }
+      }
+    } else {
+      // Si no tiene fórmulas, requiere stock y precio general
+      if (!formData.stock || !formData.price) {
+        toast.error('Por favor completa el stock y precio');
+        return;
+      }
+    }
+
     try {
       setLoading(true);
-      const idProducto = formData.id || generarIdIncremental();
       
       if (editingId) {
+        // Editar producto
+        const idProducto = formData.id || generarIdIncremental();
         const docRef = doc(db, 'PRODUCTOS', editingId);
-        await updateDoc(docRef, {
+        
+        const dataToUpdate = {
           id: idProducto,
           name: formData.name,
-          category: formData.category,
-          stock: parseInt(formData.stock),
-          price: parseFloat(formData.price),
-          idFormula: formData.idFormula || null
-        });
+          category: formData.category
+        };
+
+        if (tieneFormulas) {
+          // Añadir campos de fórmula y eliminar stock/price si existieran
+          dataToUpdate.idFormulas = formData.idFormulas;
+          dataToUpdate.idEsencia = formData.idEsencia;
+          dataToUpdate.formulasPrices = formData.formulasPrices;
+          dataToUpdate.stock = deleteField();
+          dataToUpdate.price = deleteField();
+        } else {
+          // Producto sin fórmula: eliminar campos relacionados con fórmulas si existen
+          dataToUpdate.idFormulas = deleteField();
+          dataToUpdate.idEsencia = deleteField();
+          dataToUpdate.formulasPrices = deleteField();
+          dataToUpdate.stock = parseInt(formData.stock);
+          dataToUpdate.price = parseFloat(formData.price);
+        }
+
+        await updateDoc(docRef, dataToUpdate);
         toast.success('Producto actualizado correctamente');
       } else {
-        // Crear documento con ID específico
-        const docRef = doc(db, 'PRODUCTOS', idProducto);
-        await setDoc(docRef, {
-          id: idProducto,
-          name: formData.name,
-          category: formData.category,
-          stock: parseInt(formData.stock),
-          price: parseFloat(formData.price),
-          idFormula: formData.idFormula || null
-        });
-        toast.success('Producto agregado correctamente');
+        // Crear producto(s)
+        if (tieneFormulas) {
+  let ultimoId = obtenerUltimoIdNumerico();
+  let productosCreados = 0;
+
+  for (const formulaId of formData.idFormulas) {
+    ultimoId++;
+
+    const idProducto = ultimoId.toString().padStart(12, '0');
+
+    const numberMatch = formulaId.match(/(\d+)/);
+    const gramos = numberMatch ? numberMatch[1] : '';
+
+    const nombreProducto = gramos
+      ? `${formData.name} ${gramos}GR`
+      : formData.name;
+
+    await setDoc(doc(db, 'PRODUCTOS', idProducto), {
+      id: idProducto,
+      name: nombreProducto,
+      category: formData.category,
+      price: parseFloat(formData.formulasPrices[formulaId]),
+      idFormula: formulaId,
+      idEsencia: formData.idEsencia,
+      stock: 0
+    });
+
+    productosCreados++;
+  }
+
+  toast.success(`${productosCreados} producto(s) agregado(s) correctamente`);
+}
+else {
+          // Crear un solo producto sin fórmula (NO crear campos idFormulas ni idEsencia)
+          const idProducto = formData.id || generarIdIncremental();
+          const docRef = doc(db, 'PRODUCTOS', idProducto);
+          await setDoc(docRef, {
+            id: idProducto,
+            name: formData.name,
+            category: formData.category,
+            stock: parseInt(formData.stock),
+            price: parseFloat(formData.price)
+          });
+          toast.success('Producto agregado correctamente');
+        }
       }
       
       setShowModal(false);
-      setFormData({ id: '', name: '', category: '', stock: '', price: '', idFormula: '' });
+      setFormData({ id: '', name: '', category: '', stock: '', price: '', idFormulas: [], idEsencia: '', formulasPrices: {} });
       setEditingId(null);
       cargarProductos();
     } catch (err) {
@@ -166,9 +340,11 @@ export default function AdminInventario() {
       id: producto.id,
       name: producto.name,
       category: producto.category,
-      stock: producto.stock,
+      stock: producto.stock || '',
       price: producto.price,
-      idFormula: producto.idFormula || ''
+      idFormulas: producto.idFormula ? [producto.idFormula] : [],
+      idEsencia: producto.idEsencia || '',
+      formulasPrices: producto.idFormula ? { [producto.idFormula]: producto.price } : {}
     });
     setEditingId(producto.documentId);
     setShowModal(true);
@@ -283,15 +459,17 @@ export default function AdminInventario() {
           if (row.Nombre && row.Categoría && row.Stock !== undefined && row.Precio !== undefined) {
             const idProducto = row.ID ? row.ID.toString().padStart(12, '0') : generarIdIncremental();
             const docRef = doc(db, 'PRODUCTOS', idProducto);
-            await setDoc(docRef, {
+            // Sólo incluir idFormula si viene en la fila (no crear campo vacío/null)
+            const dataToSave = {
               id: idProducto,
               name: row.Nombre,
               category: row.Categoría,
               stock: parseInt(row.Stock),
-              price: parseFloat(row.Precio),
-              idFormula: row['ID Fórmula'] || null
-            });
-            importados++;
+              price: parseFloat(row.Precio)
+            };
+            if (row['ID Fórmula']) dataToSave.idFormula = row['ID Fórmula'];
+            await setDoc(docRef, dataToSave);
+             importados++;
           }
         }
 
@@ -311,8 +489,9 @@ export default function AdminInventario() {
 
   const closeModal = () => {
     setShowModal(false);
-    setFormData({ id: '', name: '', category: '', stock: '', price: '', idFormula: '' });
+    setFormData({ id: '', name: '', category: '', stock: '', price: '', idFormulas: [], idEsencia: '', formulasPrices: {} });
     setEditingId(null);
+    setShowFormulas(false);
   };
 
   const closeImportModal = () => {
@@ -322,6 +501,16 @@ export default function AdminInventario() {
   const handleLimpiarBusqueda = () => {
     setBusqueda('');
   };
+
+  const tieneFormulas = formData.idFormulas && formData.idFormulas.length > 0;
+
+  const obtenerUltimoIdNumerico = () => {
+  const idsNumericos = productos
+    .map(p => parseInt(p.id))
+    .filter(id => !isNaN(id));
+
+  return idsNumericos.length > 0 ? Math.max(...idsNumericos) : 0;
+};
 
   return (
     <div className="inventario-container">
@@ -450,42 +639,147 @@ export default function AdminInventario() {
                   ))}
                 </datalist>
               </div>
-              <div className="form-group">
-                <label>Stock *</label>
-                <input 
-                  type="number" 
-                  name="stock" 
-                  value={formData.stock}
-                  onChange={handleInputChange}
-                  placeholder="Cantidad"
-                  min="0"
-                  required
-                />
+
+              <div className="forms-group">
+                <label className="formula-toggle">
+  <input
+    type="checkbox"
+    checked={showFormulas}
+    onChange={handleToggleFormulas}
+  />
+  <span className="toggle-slider"></span>
+  <span className="toggle-text">¿Este producto tiene fórmula?</span>
+</label>
+
               </div>
-              <div className="form-group">
-                <label>Precio *</label>
-                <input 
-                  type="number" 
-                  name="price" 
-                  value={formData.price}
-                  onChange={handleInputChange}
-                  placeholder="Precio"
-                  step="0.01"
-                  min="0"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>ID Fórmula (opcional)</label>
-                <input 
-                  type="text" 
-                  name="idFormula" 
-                  value={formData.idFormula}
-                  onChange={handleInputChange}
-                  placeholder="ID de la fórmula (no se guarda aún)"
-                  disabled
-                />
-              </div>
+
+              {showFormulas && (
+                <>
+                  <div className="form-group">
+                    <label>Selecciona Fórmulas *</label>
+                    {formData.idFormulas.length > 0 && (
+                      <div className="selected-formulas">
+                        {formData.idFormulas.map(formulaId => (
+                          <span key={formulaId} className="formula-tag">
+                            {formulaId}
+                            <button
+                              type="button"
+                              onClick={() => handleSelectFormula(formulaId)}
+                              className="formula-tag-remove"
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="formulas-list">
+                      {loadingFormulas ? (
+                        <p className="formulas-loading">Cargando fórmulas...</p>
+                      ) : formulas.length > 0 ? (
+                        <ul className="formulas-dropdown">
+                          {formulas.map(formula => (
+                            <li key={formula.id} className="formula-item">
+                              <button
+                                type="button"
+                                onClick={() => handleSelectFormula(formula.id)}
+                                className={`formula-button ${formData.idFormulas.includes(formula.id) ? 'selected' : ''}`}
+                              >
+                                <div className="formula-header">
+                                  <strong>{formula.id}</strong>
+                                  {formData.idFormulas.includes(formula.id) && <span>✓</span>}
+                                </div>
+                                <div className="formula-details">
+                                  <span>🧪 Alcohol: {formula.alcohol}g</span>
+                                  <span>🌿 Esencia: {formula.esenciagr}g</span>
+                                  <span>💫 Feromonas: {formula.feromonasgotas} gotas</span>
+                                  <span>🔒 Fijador: {formula.fijadorgr}g</span>
+                                </div>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="formulas-empty">No hay fórmulas disponibles</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Inputs de precio por fórmula seleccionada */}
+                  {formData.idFormulas.length > 0 && (
+                    <div className="formulas-prices">
+                      <label style={{ fontWeight: 600, marginBottom: '12px', display: 'block' }}>Precio por Fórmula *</label>
+                      {formData.idFormulas.map(formulaId => (
+                        <div key={formulaId} className="form-group" style={{ marginBottom: '12px' }}>
+                          <label>{formulaId}</label>
+                          <input 
+                            type="number" 
+                            value={formData.formulasPrices[formulaId] || ''}
+                            onChange={(e) => handleFormulaPriceChange(formulaId, e.target.value)}
+                            placeholder={`Precio para ${formulaId}`}
+                            step="0.01"
+                            min="0"
+                            required
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="form-group">
+                    <label>Esencia *</label>
+                    {loadingEsencias ? (
+                      <p style={{ color: 'var(--color-text-soft)', fontSize: '13px' }}>Cargando esencias...</p>
+                    ) : (
+                      <select
+                        name="idEsencia"
+                        value={formData.idEsencia}
+                        onChange={handleInputChange}
+                        required
+                      >
+                        <option value="">-- Selecciona una esencia --</option>
+                        {esencias.map(esencia => (
+                          <option key={esencia.id} value={esencia.id}>
+                            {esencia.nombre || esencia.name || esencia.id}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {!tieneFormulas && (
+                <>
+                  <div className="form-group">
+                    <label>Stock *</label>
+                    <input 
+                      type="number" 
+                      name="stock" 
+                      value={formData.stock}
+                      onChange={handleInputChange}
+                      placeholder="Cantidad"
+                      min="0"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Precio *</label>
+                    <input 
+                      type="number" 
+                      name="price" 
+                      value={formData.price}
+                      onChange={handleInputChange}
+                      placeholder="Precio"
+                      step="0.01"
+                      min="0"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+
               <div className="form-actions">
                 <button type="button" onClick={closeModal} className="btn btn-secondary">
                   Cancelar

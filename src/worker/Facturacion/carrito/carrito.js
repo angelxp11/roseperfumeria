@@ -50,7 +50,12 @@ const Carrito = forwardRef((props, ref) => {
             : item
         ));
       } else {
-        setCarrito([...carrito, { ...producto, cantidad: 1 }]);
+        setCarrito([...carrito, { 
+          ...producto, 
+          cantidad: 1,
+          idFormula: producto.idFormula || null,
+          idEsencia: producto.idEsencia || null
+        }]);
       }
     }
   }));
@@ -89,6 +94,7 @@ const Carrito = forwardRef((props, ref) => {
 
   const handleCompletarCompra = (datosPago) => {
     console.log('Compra completada:', datosPago);
+    console.log('Items de la compra:', carrito);
     toast.success('¡Compra finalizada con éxito!', {
         position: 'top-right',
         autoClose: 3000,

@@ -1,205 +1,215 @@
 @import '../../resources/colors/colors.css';
 
 .rf-facturas-container {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  padding: 20px;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
 }
 
 .rf-facturas-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 15px;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid var(--color-border);
 }
 
 .rf-facturas-icon {
-  font-size: 1.75rem;
+  font-size: 32px;
   color: var(--color-primary);
-  flex-shrink: 0;
 }
 
 .rf-facturas-header h2 {
+  font-size: 28px;
   margin: 0;
   color: var(--color-text);
-  font-size: 1.5rem;
 }
 
 /* Filters */
 .rf-facturas-filters {
   display: flex;
-  gap: 12px;
-  align-items: center;
+  gap: 15px;
+  margin-bottom: 30px;
   flex-wrap: wrap;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
+  align-items: center;
 }
 
 .rf-filter-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex: 1;
   min-width: 200px;
-  position: relative;
 }
 
 .rf-filter-icon {
   color: var(--color-secondary);
-  font-size: 1.1rem;
-  pointer-events: none;
-  position: absolute;
-  left: 10px;
+  font-size: 18px;
 }
 
-.rf-filter-input {
-  width: 100%;
-  padding: 10px 16px 10px 36px;
-  border: 1px solid var(--color-border);
+.rf-filter-input,
+.rf-filter-select {
+  padding: 10px 12px;
+  border: 2px solid var(--color-border);
   border-radius: 6px;
-  background: #181818;
+  font-size: 14px;
+  background-color: rgba(255, 255, 255, 0.05);
   color: var(--color-text);
-  font-size: 0.95rem;
-  outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.3s;
+  flex: 1;
 }
 
-.rf-filter-input:focus {
+.rf-filter-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.rf-filter-input:focus,
+.rf-filter-select:focus {
+  outline: none;
   border-color: var(--color-primary);
 }
 
-.rf-filter-date {
-  padding: 10px 12px;
-  padding-left: 12px;
+.rf-filter-select {
+  cursor: pointer;
+}
+
+.rf-filter-select option {
+  background-color: var(--color-bg);
+  color: var(--color-text);
 }
 
 .rf-btn-limpiar {
-  background: #666;
-  color: var(--color-text);
+  padding: 10px 15px;
+  background-color: var(--color-primary);
+  color: white;
   border: none;
   border-radius: 6px;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   cursor: pointer;
-  transition: background 0.2s;
-  flex-shrink: 0;
-  padding: 0;
+  font-size: 16px;
+  transition: background-color 0.3s;
 }
 
 .rf-btn-limpiar:hover {
-  background: #555;
-}
-
-.rf-btn-limpiar svg {
-  font-size: 1.2rem;
+  background-color: var(--color-secondary);
 }
 
 /* Facturas List */
 .rf-facturas-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   max-height: calc(100vh - 350px);
   overflow-y: auto;
-  padding-right: 8px;
+  padding-right: 10px;
+}
+
+.rf-facturas-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.rf-facturas-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.rf-facturas-list::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border-radius: 10px;
+}
+
+.rf-facturas-list::-webkit-scrollbar-thumb:hover {
+  background: var(--color-secondary);
 }
 
 .rf-loading-text,
 .rf-no-results {
-  color: var(--color-secondary);
   text-align: center;
-  padding: 40px;
-  font-size: 1.1rem;
+  padding: 40px 20px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 16px;
 }
 
 /* Factura Card */
 .rf-factura-card {
-  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--color-border);
-  border-radius: 10px;
-  padding: 18px;
-  transition: all 0.2s;
+  border-radius: 8px;
+  padding: 20px;
+  background-color: rgba(255, 255, 255, 0.02);
+  transition: background-color 0.3s;
 }
 
 .rf-factura-card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--color-primary);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
 .rf-factura-header-card {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
   border-bottom: 1px solid var(--color-border);
 }
 
 .rf-factura-id-fecha {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex: 1;
 }
 
 .rf-factura-id {
-  margin: 0;
+  font-size: 20px;
+  font-weight: bold;
+  margin: 0 0 5px 0;
   color: var(--color-primary);
-  font-size: 1.2rem;
-  font-weight: 600;
 }
 
 .rf-factura-fecha {
   margin: 0;
-  color: var(--color-secondary);
-  font-size: 0.9rem;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .rf-factura-total {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  text-align: right;
 }
 
 .rf-total-label {
-  color: var(--color-secondary);
-  font-weight: 500;
+  display: block;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 5px;
 }
 
 .rf-total-amount {
-  color: var(--color-primary);
-  font-size: 1.3rem;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--color-secondary);
 }
 
 /* Productos */
 .rf-factura-productos {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .rf-factura-productos h4 {
-  margin: 0 0 10px 0;
-  color: var(--color-text);
-  font-size: 1rem;
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: var(--color-primary);
 }
 
 .rf-productos-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 13px;
 }
 
 .rf-productos-table thead {
-  background: rgba(255, 255, 255, 0.08);
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
 .rf-productos-table th {
-  padding: 8px;
+  padding: 10px;
   text-align: left;
   color: var(--color-secondary);
   font-weight: 600;
@@ -207,83 +217,213 @@
 }
 
 .rf-productos-table td {
-  padding: 8px;
-  color: var(--color-text);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.rf-productos-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.03);
+  padding: 10px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-soft);
 }
 
 .rf-no-data {
   text-align: center;
-  color: var(--color-secondary);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 /* Método de Pago */
 .rf-factura-metodo {
-  margin-bottom: 12px;
+  margin-bottom: 15px;
 }
 
 .rf-factura-metodo h4 {
-  margin: 0 0 8px 0;
-  color: var(--color-text);
-  font-size: 1rem;
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: var(--color-primary);
 }
 
 .rf-metodo-content {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  background-color: rgba(255, 255, 255, 0.03);
+  padding: 12px;
+  border-radius: 6px;
 }
 
 .rf-metodo-item {
-  background: rgba(176, 116, 69, 0.15);
-  color: var(--color-primary);
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  border: 1px solid rgba(176, 116, 69, 0.3);
+  padding: 6px 0;
+  color: var(--color-text-soft);
+  font-size: 13px;
 }
 
 /* Status */
 .rf-factura-status {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 15px;
 }
 
 .rf-status-badge {
+  display: inline-block;
   padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 0.85rem;
+  border-radius: 20px;
+  font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
+  text-align: center;
+  width: fit-content;
 }
 
 .rf-status-completada {
-  background: rgba(39, 174, 96, 0.2);
-  color: #27ae60;
-  border: 1px solid rgba(39, 174, 96, 0.4);
+  background-color: rgba(76, 175, 80, 0.3);
+  color: #4CAF50;
 }
 
-/* Scrollbar */
-.rf-facturas-list::-webkit-scrollbar {
-  width: 6px;
+.rf-status-cancelada {
+  background-color: rgba(244, 67, 54, 0.3);
+  color: #f44336;
 }
 
-.rf-facturas-list::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 3px;
+.rf-motivo-cancelacion {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: rgba(244, 67, 54, 0.15);
+  border-left: 3px solid #f44336;
+  border-radius: 4px;
+  font-size: 13px;
 }
 
-.rf-facturas-list::-webkit-scrollbar-thumb {
-  background: var(--color-primary);
-  border-radius: 3px;
+.rf-motivo-cancelacion p {
+  margin: 0;
+  color: var(--color-text-soft);
 }
 
-.rf-facturas-list::-webkit-scrollbar-thumb:hover {
-  background: var(--color-secondary);
+/* Acciones */
+.rf-factura-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid var(--color-border);
+}
+
+.rf-btn-cancelar {
+  flex: 1;
+  padding: 10px 15px;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background-color 0.3s;
+}
+
+.rf-btn-cancelar:hover:not(:disabled) {
+  background-color: #da190b;
+}
+
+.rf-btn-cancelar:disabled {
+  background-color: rgba(255, 255, 255, 0.2);
+  cursor: not-allowed;
+}
+
+/* Modal */
+.rf-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.rf-modal-content {
+  background: var(--color-bg);
+  padding: 30px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  max-width: 500px;
+  width: 90%;
+}
+
+.rf-modal-content h3 {
+  margin: 0 0 10px 0;
+  color: var(--color-primary);
+  font-size: 20px;
+}
+
+.rf-modal-info {
+  color: var(--color-text-soft);
+  margin: 10px 0 20px 0;
+  font-size: 14px;
+}
+
+.rf-modal-textarea {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  margin-bottom: 20px;
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--color-text);
+}
+
+.rf-modal-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.rf-modal-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.rf-modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.rf-btn-confirmar,
+.rf-btn-cerrar {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.rf-btn-confirmar {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.rf-btn-confirmar:hover:not(:disabled) {
+  background-color: var(--color-secondary);
+}
+
+.rf-btn-cerrar {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--color-text);
+}
+
+.rf-btn-cerrar:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.rf-btn-confirmar:disabled,
+.rf-btn-cerrar:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 @media (max-width: 768px) {

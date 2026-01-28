@@ -3,7 +3,18 @@ import { GiMoneyStack } from 'react-icons/gi';
 import { FaDivide, FaCcMastercard } from 'react-icons/fa';
 import { FaMoneyBillTransfer } from 'react-icons/fa6';
 import { ToastContainer, toast } from 'react-toastify';
-import { collection, getDocs, doc, updateDoc, increment, setDoc } from 'firebase/firestore';
+import {
+  collection,
+  getDocs,
+  getDoc,
+  doc,
+  updateDoc,
+  increment,
+  setDoc,
+  query,
+  where
+} from 'firebase/firestore';
+
 import { db } from '../../../../server/firebase';
 import Carga from '../../../../resources/Carga/Carga';
 import './metododepago.css';
@@ -47,14 +58,132 @@ export default function MetodoDePago({ total, onClose, onCompletarCompra, items 
   /* =======================
      HELPERS
   ======================= */
-  const actualizarStock = async () => {
-    for (const item of items) {
-      const ref = doc(db, 'PRODUCTOS', item.documentId);
-      await updateDoc(ref, {
-        stock: increment(-item.cantidad)
-      });
+const descontarInsumosPorFormula = async (items = []) => {
+  console.log('🟡 Iniciando descuento de insumos');
+  console.log('🟡 Items recibidos:', items);
+
+  for (const item of items) {
+    console.log('➡️ Procesando item:', item);
+    console.log('   id:', item.id);
+    console.log('   name:', item.name);
+    console.log('   idFormula:', item.idFormula);
+    console.log('   idEsencia:', item.idEsencia);
+    console.log('   documentId:', item.documentId);
+    console.log('   cantidad:', item.cantidad);
+
+    const cantidad = Number(item.cantidad) || 0;
+
+    if (cantidad <= 0) {
+      console.warn('❌ Cantidad inválida, se omite');
+      continue;
     }
-  };
+
+    /* =================================================
+       CASO 1: PRODUCTO CON FÓRMULA
+    ================================================= */
+    if (item.idFormula) {
+      console.log('📦 CASO 1: Producto con fórmula');
+
+      // 1️⃣ Obtener fórmula
+      console.log('🔍 Buscando fórmula:', item.idFormula);
+
+      const formulaRef = doc(db, 'FORMULAS', item.idFormula);
+      const formulaSnap = await getDoc(formulaRef);
+
+      if (!formulaSnap.exists()) {
+        console.error('❌ NO existe la fórmula:', item.idFormula);
+        continue;
+      }
+
+      const formula = formulaSnap.data();
+      console.log('✅ Fórmula encontrada:', formula);
+
+      // 2️⃣ Insumos generales (ALCOHOL, FIJADOR, FEROMONAS)
+      const insumos = [
+        { id: 'ALCOHOL', campo: 'alcohol' },
+        { id: 'FIJADOR', campo: 'fijadorgr' },
+        { id: 'FEROMONAS', campo: 'feromonasgotas' }
+      ];
+
+      for (const insumo of insumos) {
+        const valor = Number(formula[insumo.campo]) || 0;
+        const total = valor * cantidad;
+
+        console.log(`🧪 Insumo ${insumo.id}`);
+        console.log(`   Valor por unidad: ${valor}`);
+        console.log(`   Total a descontar: ${total}`);
+
+        if (total <= 0) {
+          console.warn(`⚠️ No se descuenta ${insumo.id} (total <= 0)`);
+          continue;
+        }
+
+        try {
+          const ref = doc(db, 'INSUMOS', insumo.id);
+          await updateDoc(ref, {
+            stock: increment(-total)
+          });
+          console.log(`✅ Descontado ${total} de ${insumo.id}`);
+        } catch (error) {
+          console.error(`🔥 Error descontando ${insumo.id}`, error);
+        }
+      }
+
+      // 3️⃣ Esencia específica (por idEsencia)
+      if (item.idEsencia) {
+        const esenciaUsada = Number(formula.esenciagr) || 0;
+        const totalEsencia = esenciaUsada * cantidad;
+
+        console.log('🌸 Esencia específica:', item.idEsencia);
+        console.log('   Total a descontar:', totalEsencia);
+
+        if (totalEsencia > 0) {
+          try {
+            const esenciaRef = doc(db, 'ESENCIA', item.idEsencia);
+            await updateDoc(esenciaRef, {
+              stock: increment(-totalEsencia)
+            });
+            console.log(`✅ Descontada esencia ${totalEsencia}`);
+          } catch (error) {
+            console.error('🔥 Error descontando ESENCIA', error);
+          }
+        }
+      } else {
+        console.warn('⚠️ Item sin idEsencia');
+      }
+
+      continue;
+    }
+
+    /* =================================================
+       CASO 2: PRODUCTO NORMAL (SIN FÓRMULA)
+    ================================================= */
+    console.log('📦 CASO 2: Producto normal sin fórmula');
+
+    if (item.documentId) {
+      try {
+        const productoRef = doc(db, 'PRODUCTOS', item.documentId);
+        console.log(`✏️ Descontando ${cantidad} del producto ${item.documentId}`);
+
+        await updateDoc(productoRef, {
+          stock: increment(-cantidad)
+        });
+
+        console.log(`✅ Descontado ${cantidad} del producto`);
+      } catch (error) {
+        console.error('🔥 Error descontando stock del producto', error);
+      }
+    } else {
+      console.warn('⚠️ Item sin documentId');
+    }
+  }
+
+  console.log('🟢 Fin descuento de insumos');
+};
+
+
+
+
 
   const formatearPrecio = (valor) =>
     new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(valor || 0);
@@ -184,8 +313,8 @@ export default function MetodoDePago({ total, onClose, onCompletarCompra, items 
       if (metodoSeleccionado === 'tarjeta') {
         await crearFactura('Tarjeta', total, { metodo: 'Tarjeta' });
       }
-
-      await actualizarStock();
+      // después de crear factura y actualizar caja
+      await descontarInsumosPorFormula(items);
 
       toast.success('¡Pago realizado con éxito!');
       setTimeout(() => {
