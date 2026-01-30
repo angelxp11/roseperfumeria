@@ -14,13 +14,18 @@ export default function AdminFormulas() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [busqueda, setBusqueda] = useState('');
+  const [envasesProducts, setEnvasesProducts] = useState([]);
+  const [loadingEnvases, setLoadingEnvases] = useState(false);
   const [formData, setFormData] = useState({
     id: '',
     alcohol: '',
     esenciagr: '',
     feromonasgotas: '',
-    fijadorgr: ''
+    fijadorgr: '',
+    envase: [] // NUEVO: array de ids de envases
   });
+  const [envaseEnabled, setEnvaseEnabled] = useState(false); // toggle opcional
+  const [selectedEnvaseToAdd, setSelectedEnvaseToAdd] = useState('');
 
   useEffect(() => {
     cargarFormulas();
@@ -81,6 +86,32 @@ export default function AdminFormulas() {
     }));
   };
 
+  const handleToggleEnvase = (productId) => {
+    setFormData(prev => {
+      const exists = prev.envase.includes(productId);
+      return {
+        ...prev,
+        envase: exists ? prev.envase.filter(id => id !== productId) : [...prev.envase, productId]
+      };
+    });
+  };
+
+  const handleAddEnvaseFromSelect = () => {
+    if (!selectedEnvaseToAdd) return;
+    setFormData(prev => ({
+      ...prev,
+      envase: prev.envase.includes(selectedEnvaseToAdd) ? prev.envase : [...prev.envase, selectedEnvaseToAdd]
+    }));
+    setSelectedEnvaseToAdd('');
+  };
+  
+  const handleRemoveEnvase = (productId) => {
+    setFormData(prev => ({
+      ...prev,
+      envase: prev.envase.filter(id => id !== productId)
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -100,7 +131,8 @@ export default function AdminFormulas() {
           alcohol: parseInt(formData.alcohol),
           esenciagr: parseInt(formData.esenciagr),
           feromonasgotas: parseInt(formData.feromonasgotas),
-          fijadorgr: parseInt(formData.fijadorgr)
+          fijadorgr: parseInt(formData.fijadorgr),
+          envase: formData.envase || [] // guardar envases
         });
         toast.success('Fórmula actualizada correctamente');
       } else {
@@ -110,13 +142,16 @@ export default function AdminFormulas() {
           alcohol: parseInt(formData.alcohol),
           esenciagr: parseInt(formData.esenciagr),
           feromonasgotas: parseInt(formData.feromonasgotas),
-          fijadorgr: parseInt(formData.fijadorgr)
+          fijadorgr: parseInt(formData.fijadorgr),
+          envase: formData.envase || []
         });
         toast.success('Fórmula agregada correctamente');
       }
       
       setShowModal(false);
-      setFormData({ id: '', alcohol: '', esenciagr: '', feromonasgotas: '', fijadorgr: '' });
+      setFormData({ id: '', alcohol: '', esenciagr: '', feromonasgotas: '', fijadorgr: '', envase: [] });
+      setEnvaseEnabled(false);
+      setSelectedEnvaseToAdd('');
       setEditingId(null);
       cargarFormulas();
     } catch (err) {
@@ -133,8 +168,12 @@ export default function AdminFormulas() {
       alcohol: formula.alcohol,
       esenciagr: formula.esenciagr,
       feromonasgotas: formula.feromonasgotas,
-      fijadorgr: formula.fijadorgr
+      fijadorgr: formula.fijadorgr,
+      envase: formula.envase || []
     });
+    // Cargar envases para mostrarlos en el modal
+    cargarEnvasesProductos();
+    setEnvaseEnabled(Boolean(formula.envase && formula.envase.length > 0));
     setEditingId(formula.documentId);
     setShowModal(true);
   };
@@ -268,9 +307,28 @@ export default function AdminFormulas() {
     reader.readAsArrayBuffer(file);
   };
 
+  const cargarEnvasesProductos = async () => {
+    try {
+      setLoadingEnvases(true);
+      const productosRef = collection(db, 'PRODUCTOS');
+      const snapshot = await getDocs(productosRef);
+      const envs = snapshot.docs
+        .map(d => ({ documentId: d.id, ...d.data() }))
+        .filter(p => (p.category || '').toUpperCase() === 'ENVASE')
+        .map(p => ({ documentId: p.documentId, id: p.id, name: p.name, price: Number(p.price) || 0, stock: p.stock }));
+      setEnvasesProducts(envs);
+    } catch (err) {
+      console.error('Error al cargar envases:', err);
+    } finally {
+      setLoadingEnvases(false);
+    }
+  };
+
   const closeModal = () => {
     setShowModal(false);
-    setFormData({ id: '', alcohol: '', esenciagr: '', feromonasgotas: '', fijadorgr: '' });
+    setFormData({ id: '', alcohol: '', esenciagr: '', feromonasgotas: '', fijadorgr: '', envase: [] });
+    setEnvaseEnabled(false);
+    setSelectedEnvaseToAdd('');
     setEditingId(null);
   };
 
@@ -287,7 +345,7 @@ export default function AdminFormulas() {
       <div className="formulas-header">
         <h2>⚗️ Gestión de Fórmulas</h2>
         <div className="formulas-actions">
-          <button onClick={() => setShowModal(true)} className="btn btn-primary">
+          <button onClick={() => { setFormData({ id: '', alcohol: '', esenciagr: '', feromonasgotas: '', fijadorgr: '', envase: [] }); setEnvaseEnabled(false); cargarEnvasesProductos(); setShowModal(true); }} className="btn btn-primary">
             <FaPlus /> Agregar Fórmula
           </button>
           <button onClick={descargarExcel} className="btn btn-secondary" disabled={loading}>
@@ -429,6 +487,45 @@ export default function AdminFormulas() {
                   required
                 />
               </div>
+              <div className="form-group">
+                <label>Permitir Envases (opcional)</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                  <label className="switch">
+                    <input type="checkbox" checked={envaseEnabled} onChange={() => { if (!envasesProducts.length) cargarEnvasesProductos(); setEnvaseEnabled(!envaseEnabled); }} />
+                    <span className="slider" />
+                  </label>
+                  <small style={{ color: 'var(--color-text-soft)' }}>Activar para agregar envases compatibles</small>
+                </div>
+                {envaseEnabled && (
+                  <>
+                    {loadingEnvases ? <p>Cargando envases...</p> : envasesProducts.length > 0 ? (
+                      <>
+                        <div className="envase-select-row">
+                          <select value={selectedEnvaseToAdd} onChange={(e) => setSelectedEnvaseToAdd(e.target.value)}>
+                            <option value="">-- Selecciona envase --</option>
+                            {envasesProducts.filter(ep => !formData.envase.includes(ep.id)).map(e => (
+                              <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
+                            ))}
+                          </select>
+                          <button type="button" onClick={handleAddEnvaseFromSelect} className="btn btn-primary" disabled={!selectedEnvaseToAdd}>Agregar</button>
+                        </div>
+                        <div className="envases-selected-list">
+                          {formData.envase.map(id => {
+                            const p = envasesProducts.find(ep => ep.id === id);
+                            return (
+                              <div key={id} className="envase-chip">
+                                <span>{p ? p.name : id}</span>
+                                <button type="button" onClick={() => handleRemoveEnvase(id)} className="remove-envase">✕</button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : <p>No hay envases disponibles</p>}
+                  </>
+                )}
+              </div>
+
               <div className="form-actions">
                 <button type="button" onClick={closeModal} className="btn btn-secondary">
                   Cancelar

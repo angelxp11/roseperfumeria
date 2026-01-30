@@ -7,14 +7,16 @@ import './Cajas.css';
 
 export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 	const [efectivo, setEfectivo] = useState('');
-	const [nequi, setNequi] = useState('');
-	const [bancolombia, setBancolombia] = useState('');
+	const [transferencia, setTransferencia] = useState('');
+	// Métodos relevantes (type EFECTIVO | TRANSFERENCIA) y inputs por método (apertura)
+	const [paymentMethodsCaja, setPaymentMethodsCaja] = useState([]); // array de métodos {id,name,type,balance,...}
+	const [aperturaInputs, setAperturaInputs] = useState({}); // { [methodName]: '12345' }
 	const [loading, setLoading] = useState(false);
 
 	const denominaciones = [100,200,500,1000,2000,5000,10000,20000,50000,100000];
 	const [denomCounts, setDenomCounts] = useState(() => ({}));
-	const [metodosTotales, setMetodosTotales] = useState({ EFECTIVO: 0, NEQUI: 0, BANCOLOMBIA: 0, TRANSFERENCIA: 0 });
-	const [foundMetodos, setFoundMetodos] = useState({ EFECTIVO: '', NEQUI: '', BANCOLOMBIA: '' });
+	const [metodosTotales, setMetodosTotales] = useState({ EFECTIVO: 0, TRANSFERENCIA: 0 });
+	const [foundMetodos, setFoundMetodos] = useState({ EFECTIVO: '', TRANSFERENCIA: '' });
 
 	const fechaHoyId = () => {
 		const d = new Date();
@@ -27,27 +29,79 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 	const formatNumber = val =>
 		new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(Number(val) || 0);
 
+	// Obtener métodos de pago y filtrar por type (EFECTIVO / TRANSFERENCIA)
+	const fetchPaymentMethodsByType = async () => {
+		const snap = await getDocs(collection(db, 'PAYMENT'));
+		const map = {};
+		snap.forEach(d => {
+			const data = d.data();
+			const t = (data.type || '').toString().trim().toUpperCase();
+			if (t === 'EFECTIVO' || t === 'TRANSFERENCIA') {
+				// Guardamos el primer método por tipo (si hay varios, se toma el primero)
+				if (!map[t]) {
+					map[t] = { id: d.id, balance: Number(data.balance || 0), name: data.name || '' };
+				}
+			}
+		});
+		return map;
+	};
+
+	// Obtiene array de métodos de pago cuyo campo type sea EFECTIVO o TRANSFERENCIA
+	const fetchPaymentMethodsArray = async () => {
+		const snap = await getDocs(collection(db, 'PAYMENT'));
+		const arr = [];
+		snap.forEach(d => {
+			const data = d.data();
+			const t = (data.type || '').toString().trim().toUpperCase();
+			if (t === 'EFECTIVO' || t === 'TRANSFERENCIA') {
+				arr.push({ id: d.id, name: data.name, type: t, balance: Number(data.balance || 0), number: data.number || '', titular: data.titular || '' });
+			}
+		});
+		return arr;
+	};
+
 	// load existing CAJAS doc
 	useEffect(() => {
 		const cargarCaja = async () => {
 			const id = fechaHoyId();
 			const ref = doc(db, 'CAJAS', id);
 			const snap = await getDoc(ref);
+			// cargar métodos de pago relevantes
+			const pagos = await fetchPaymentMethodsArray();
+			setPaymentMethodsCaja(pagos);
+
 			if (snap.exists()) {
 				const data = snap.data();
 				// prefill open-mode inputs from APERTURA object
 				if (mode === 'open' && data.APERTURA) {
-					if (typeof data.APERTURA.EFECTIVO !== 'undefined') setEfectivo(String(data.APERTURA.EFECTIVO));
-					if (typeof data.APERTURA.NEQUI !== 'undefined') setNequi(String(data.APERTURA.NEQUI));
-					if (typeof data.APERTURA.BANCOLOMBIA !== 'undefined') setBancolombia(String(data.APERTURA.BANCOLOMBIA));
+					// Si APERTURA tiene keys por método name, úsalas. Si hay legacy EFECTIVO/TRANSFERENCIA, mapear a los métodos detectados.
+					const aperturaObj = data.APERTURA || {};
+					const inputs = {};
+					for (const m of pagos) {
+						// prioridad: aperturaObj[method.name] -> aperturaObj[type legacy] -> 0
+						const val = (typeof aperturaObj[m.name] !== 'undefined') ? aperturaObj[m.name]
+							: (m.type === 'EFECTIVO' && typeof aperturaObj.EFECTIVO !== 'undefined' ? aperturaObj.EFECTIVO
+							: (m.type === 'TRANSFERENCIA' && typeof aperturaObj.TRANSFERENCIA !== 'undefined' ? aperturaObj.TRANSFERENCIA : 0));
+						inputs[m.name] = String(val || 0);
+					}
+					setAperturaInputs(inputs);
 				}
-				// set method totals for close mode display
-				setMetodosTotales({
-					EFECTIVO: Number(data.APERTURA?.EFECTIVO || data.EFECTIVO || 0),
-					NEQUI: Number(data.APERTURA?.NEQUI || data.NEQUI || 0),
-					BANCOLOMBIA: Number(data.APERTURA?.BANCOLOMBIA || data.BANCOLOMBIA || 0),
-					TRANSFERENCIA: Number(data.TRANSFERENCIA || 0)
-				});
+				// set method totals for close mode display: map por método
+				const metTotals = {};
+				for (const m of pagos) {
+					metTotals[m.name] = Number(
+						(snap.data().APERTURA && typeof snap.data().APERTURA[m.name] !== 'undefined') ? snap.data().APERTURA[m.name]
+						: (m.type === 'EFECTIVO' && typeof snap.data().APERTURA?.EFECTIVO !== 'undefined' ? snap.data().APERTURA.EFECTIVO
+						: (m.type === 'TRANSFERENCIA' && typeof snap.data().APERTURA?.TRANSFERENCIA !== 'undefined' ? snap.data().APERTURA.TRANSFERENCIA : m.balance || 0))
+					);
+				}
+				setMetodosTotales(metTotals);
+				// llenar foundMetodos desde CIERRE encontrado o dejar vacíos
+				const founds = {};
+				for (const m of pagos) {
+					founds[m.name] = Number(snap.data().CIERRE?.found_metodos?.[m.name] || 0);
+				}
+				setFoundMetodos(prev => ({ ...prev, ...founds }));
 			}
 		};
 		cargarCaja();
@@ -91,45 +145,21 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 			const prevSnap = await getDoc(ref);
 			const prevApertura = prevSnap.exists() && prevSnap.data().APERTURA ? prevSnap.data().APERTURA : {};
 
-			const aperturaData = {
-				EFECTIVO: Number(efectivo) || 0,
-				NEQUI: Number(nequi) || 0,
-				BANCOLOMBIA: Number(bancolombia) || 0,
-				openedAt: serverTimestamp()
-			};
-
-			// Restar de PAYMENT
-			const paymentSnap = await getDocs(collection(db, 'PAYMENT'));
-			const metodosMap = {};
-			paymentSnap.forEach(doc => {
-				metodosMap[doc.data().name] = doc.id;
-			});
-
-			if (metodosMap['EFECTIVO']) {
-				const efectivoRef = doc(db, 'PAYMENT', metodosMap['EFECTIVO']);
-				const efectivoSnap = await getDoc(efectivoRef);
-				const currentBalance = Number(efectivoSnap.data().balance || 0);
-				await setDoc(efectivoRef, {
-					balance: currentBalance - (Number(efectivo) || 0)
-				}, { merge: true });
+			// Apertura por método: usar aperturaInputs (clave = method.name). Guardar APERTURA con keys por método.
+			const aperturaData = { openedAt: serverTimestamp() };
+			for (const m of paymentMethodsCaja) {
+				const v = Number(aperturaInputs[m.name] || 0);
+				aperturaData[m.name] = v;
 			}
 
-			if (metodosMap['NEQUI']) {
-				const nequiRef = doc(db, 'PAYMENT', metodosMap['NEQUI']);
-				const nequiSnap = await getDoc(nequiRef);
-				const currentBalance = Number(nequiSnap.data().balance || 0);
-				await setDoc(nequiRef, {
-					balance: currentBalance - (Number(nequi) || 0)
-				}, { merge: true });
-			}
-
-			if (metodosMap['BANCOLOMBIA']) {
-				const bancoRef = doc(db, 'PAYMENT', metodosMap['BANCOLOMBIA']);
-				const bancoSnap = await getDoc(bancoRef);
-				const currentBalance = Number(bancoSnap.data().balance || 0);
-				await setDoc(bancoRef, {
-					balance: currentBalance - (Number(bancolombia) || 0)
-				}, { merge: true });
+			// Restar de PAYMENT por documento (si el usuario ingresó un monto para ese método)
+			for (const m of paymentMethodsCaja) {
+				const v = Number(aperturaInputs[m.name] || 0);
+				if (!v) continue;
+				const payRef = doc(db, 'PAYMENT', m.id);
+				const paySnap = await getDoc(payRef);
+				const currentBalance = Number(paySnap.data().balance || 0);
+				await setDoc(payRef, { balance: currentBalance - v }, { merge: true });
 			}
 
 			await setDoc(
@@ -147,18 +177,18 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 			const empleadoNombre = await obtenerNombreEmpleado();
 			const movId = String(Date.now());
 			let descripcion = '';
-			if (!prevApertura.EFECTIVO && !prevApertura.NEQUI && !prevApertura.BANCOLOMBIA) {
-				descripcion = `El empleado ${empleadoNombre} abrió la caja. Se retiraron de PAYMENT: EFECTIVO $${formatNumber(efectivo)}, NEQUI $${formatNumber(nequi)}, BANCOLOMBIA $${formatNumber(bancolombia)} para usar durante el día.`;
-			} else {
-				const cambios = [];
-				if (prevApertura.EFECTIVO !== aperturaData.EFECTIVO)
-					cambios.push(`EFECTIVO: de $${formatNumber(prevApertura.EFECTIVO || 0)} a $${formatNumber(aperturaData.EFECTIVO)}`);
-				if (prevApertura.NEQUI !== aperturaData.NEQUI)
-					cambios.push(`NEQUI: de $${formatNumber(prevApertura.NEQUI || 0)} a $${formatNumber(aperturaData.NEQUI)}`);
-				if (prevApertura.BANCOLOMBIA !== aperturaData.BANCOLOMBIA)
-					cambios.push(`BANCOLOMBIA: de $${formatNumber(prevApertura.BANCOLOMBIA || 0)} a $${formatNumber(aperturaData.BANCOLOMBIA)}`);
-				descripcion = `El empleado ${empleadoNombre} modificó la apertura de caja. Cambios: ${cambios.join(', ')}.`;
+			// Construir descripción con los métodos detectados
+			const cambios = [];
+			for (const m of paymentMethodsCaja) {
+				const prevVal = Number(prevApertura?.[m.name] || 0);
+				const newVal = Number(aperturaData[m.name] || 0);
+				if (!prevSnap.exists() || prevVal === 0 && newVal > 0) {
+					cambios.push(`${m.name}: $${formatNumber(newVal)}`);
+				} else if (prevVal !== newVal) {
+					cambios.push(`${m.name}: de $${formatNumber(prevVal)} a $${formatNumber(newVal)}`);
+				}
 			}
+			descripcion = cambios.length > 0 ? `El empleado ${empleadoNombre} abrió/modificó la apertura de caja. ${cambios.join(', ')}.` : `El empleado ${empleadoNombre} abrió la caja.`;
 			const movObj = {
 				momento: new Date().toISOString(),
 				descripcion
@@ -195,9 +225,14 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 	};
 
 	const computeFoundTotal = () => {
-			const efectivoTotal = computeDenomTotals().total;
-			return efectivoTotal + Number(foundMetodos.NEQUI || 0) + Number(foundMetodos.BANCOLOMBIA || 0);
-		};
+		const efectivoExists = paymentMethodsCaja.some(m => (m.type || '').toUpperCase() === 'EFECTIVO');
+		let total = efectivoExists ? computeDenomTotals().total : 0;
+		for (const m of paymentMethodsCaja) {
+			if ((m.type || '').toUpperCase() === 'EFECTIVO') continue;
+			total += Number(foundMetodos[m.name] || 0);
+		}
+		return total;
+	};
 
 	const cerrarCaja = async () => {
 		try {
@@ -214,11 +249,13 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 					denominaciones: denomDetails,
 					total_denominaciones: totalDenoms,
 					metodos_totales: metodosTotales,
-					found_metodos: {
-						EFECTIVO: Number(computeDenomTotals().total || 0),
-						NEQUI: Number(foundMetodos.NEQUI || 0),
-						BANCOLOMBIA: Number(foundMetodos.BANCOLOMBIA || 0)
-					},
+					found_metodos: (() => {
+						const fm = {};
+						for (const m of paymentMethodsCaja) {
+							fm[m.name] = (m.type === 'EFECTIVO') ? Number(computeDenomTotals().total || 0) : Number(foundMetodos[m.name] || 0);
+						}
+						return fm;
+					})(),
 					total_found: foundTotal,
 					closedAt: serverTimestamp(),
 					status: 'CERRADA'
@@ -229,56 +266,29 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 
 			await setDoc(ref, cierrePayload, { merge: true });
 
-			// Sumar el total encontrado a PAYMENT
-			const paymentSnap = await getDocs(collection(db, 'PAYMENT'));
-			const metodosMap = {};
-			paymentSnap.forEach(doc => {
-				metodosMap[doc.data().name] = doc.id;
-			});
-
-			if (metodosMap['EFECTIVO']) {
-				const efectivoRef = doc(db, 'PAYMENT', metodosMap['EFECTIVO']);
-				const efectivoSnap = await getDoc(efectivoRef);
-				const currentBalance = Number(efectivoSnap.data().balance || 0);
-				await setDoc(efectivoRef, {
-					balance: currentBalance + computeDenomTotals().total
-				}, { merge: true });
-			}
-
-			if (metodosMap['NEQUI']) {
-				const nequiRef = doc(db, 'PAYMENT', metodosMap['NEQUI']);
-				const nequiSnap = await getDoc(nequiRef);
-				const currentBalance = Number(nequiSnap.data().balance || 0);
-				await setDoc(nequiRef, {
-					balance: currentBalance + Number(foundMetodos.NEQUI || 0)
-				}, { merge: true });
-			}
-
-			if (metodosMap['BANCOLOMBIA']) {
-				const bancoRef = doc(db, 'PAYMENT', metodosMap['BANCOLOMBIA']);
-				const bancoSnap = await getDoc(bancoRef);
-				const currentBalance = Number(bancoSnap.data().balance || 0);
-				await setDoc(bancoRef, {
-					balance: currentBalance + Number(foundMetodos.BANCOLOMBIA || 0)
-				}, { merge: true });
+			// Sumar el total encontrado a PAYMENT por documento (según métodos detectados)
+			for (const m of paymentMethodsCaja) {
+				const toAdd = (m.type === 'EFECTIVO') ? Number(computeDenomTotals().total || 0) : Number(foundMetodos[m.name] || 0);
+				if (!toAdd) continue;
+				const refPay = doc(db, 'PAYMENT', m.id);
+				const snapPay = await getDoc(refPay);
+				const currentBalance = Number(snapPay.data().balance || 0);
+				await setDoc(refPay, { balance: currentBalance + toAdd }, { merge: true });
 			}
 
 			// --- MOVIMIENTOS CIERRE ---
 			const empleadoNombre = await obtenerNombreEmpleado();
 			const movId = String(Date.now());
 
-			const diferencias = {
-				EFECTIVO: computeDenomTotals().total - metodosTotales.EFECTIVO,
-				NEQUI: Number(foundMetodos.NEQUI || 0) - metodosTotales.NEQUI,
-				BANCOLOMBIA: Number(foundMetodos.BANCOLOMBIA || 0) - metodosTotales.BANCOLOMBIA
-			};
-
-			const detalleMetodos = ['EFECTIVO', 'NEQUI', 'BANCOLOMBIA']
-				.map(m => {
-					const encontrado = m === 'EFECTIVO' ? computeDenomTotals().total : Number(foundMetodos[m] || 0);
-					return `${m}: esperado $${formatNumber(metodosTotales[m])}, encontrado $${formatNumber(encontrado)}${diferencias[m] !== 0 ? ` (diferencia: ${diferencias[m] > 0 ? '+' : ''}$${formatNumber(Math.abs(diferencias[m]))})` : ''}`;
-				})
-				.join('; ');
+			// diferencias por método detectado
+			const diffs = [];
+			for (const m of paymentMethodsCaja) {
+				const esperado = Number(metodosTotales[m.name] || 0);
+				const encontrado = (m.type === 'EFECTIVO') ? Number(computeDenomTotals().total || 0) : Number(foundMetodos[m.name] || 0);
+				const diff = encontrado - esperado;
+				diffs.push(`${m.name}: esperado $${formatNumber(esperado)}, encontrado $${formatNumber(encontrado)}${diff !== 0 ? ` (diferencia: ${diff > 0 ? '+' : ''}$${formatNumber(Math.abs(diff))})` : ''}`);
+			}
+			const detalleMetodos = diffs.join('; ');
 
 			const descripcion = `El empleado ${empleadoNombre} cerró la caja. Total efectivo contado: $${formatNumber(totalDenoms)}. Métodos de pago: ${detalleMetodos}. Total encontrado: $${formatNumber(foundTotal)}.`;
 			
@@ -320,35 +330,28 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 						<div className="apertura-section">
 							<h4>Base Inicial por Método</h4>
 							<div className="base-inputs">
-								<div className="base-input-group">
-									<label>Base Efectivo</label>
-									<input
-										type="text"
-										value={efectivo !== '' ? formatNumber(efectivo) : ''}
-										onChange={e => setEfectivo(e.target.value.replace(/\D/g, ''))}
-										placeholder="0"
-									/>
-								</div>
-
-								<div className="base-input-group">
-									<label>Base Nequi</label>
-									<input
-										type="text"
-										value={nequi !== '' ? formatNumber(nequi) : ''}
-										onChange={e => setNequi(e.target.value.replace(/\D/g, ''))}
-										placeholder="0"
-									/>
-								</div>
-
-								<div className="base-input-group">
-									<label>Base Bancolombia</label>
-									<input
-										type="text"
-										value={bancolombia !== '' ? formatNumber(bancolombia) : ''}
-										onChange={e => setBancolombia(e.target.value.replace(/\D/g, ''))}
-										placeholder="0"
-									/>
-								</div>
+								{paymentMethodsCaja.length > 0 ? paymentMethodsCaja.map(m => (
+									<div className="base-input-group" key={m.id}>
+										<label>{m.name} ({m.type})</label>
+										<input
+											type="text"
+											value={aperturaInputs[m.name] !== undefined ? formatNumber(aperturaInputs[m.name]) : ''}
+											onChange={(e) => setAperturaInputs(prev => ({ ...prev, [m.name]: e.target.value.replace(/\D/g, '') }))}
+											placeholder="0"
+										/>
+									</div>
+								)) : (
+									<>
+									<div className="base-input-group">
+										<label>Base Efectivo</label>
+										<input type="text" value={efectivo !== '' ? formatNumber(efectivo) : ''} onChange={e => setEfectivo(e.target.value.replace(/\D/g, ''))} placeholder="0" />
+									</div>
+									<div className="base-input-group">
+										<label>Base Transferencia</label>
+										<input type="text" value={transferencia !== '' ? formatNumber(transferencia) : ''} onChange={e => setTransferencia(e.target.value.replace(/\D/g, ''))} placeholder="0" />
+									</div>
+									</>
+								)}
 							</div>
 						</div>
 
@@ -387,18 +390,18 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 
 						<div className="metodos-section">
 							<h4>Totales en caja (según CAJAS)</h4>
-							{['EFECTIVO','NEQUI','BANCOLOMBIA'].map(m => (
-								<div className="metodo-row" key={m}>
-									<div className="metodo-label">{m}</div>
-									<div className="metodo-total">${formatNumber(metodosTotales[m] || 0)}</div>
+							{(paymentMethodsCaja.length > 0 ? paymentMethodsCaja : [{ name: 'EFECTIVO', type: 'EFECTIVO' }, { name: 'TRANSFERENCIA', type: 'TRANSFERENCIA' }]).map(m => (
+								<div className="metodo-row" key={m.name}>
+									<div className="metodo-label">{m.name}</div>
+									<div className="metodo-total">${formatNumber(metodosTotales[m.name] || 0)}</div>
 									<input
 										className="metodo-found"
 										type="text"
 										inputMode="numeric"
-										value={m === 'EFECTIVO' ? formatNumber(computeDenomTotals().total) : formatNumber(foundMetodos[m] || 0)}
-										onChange={e => m !== 'EFECTIVO' && setFoundMetodos(prev => ({ ...prev, [m]: e.target.value.replace(/\D/g, '') }))}
+										value={m.type === 'EFECTIVO' ? formatNumber(computeDenomTotals().total) : formatNumber(foundMetodos[m.name] || 0)}
+										onChange={e => m.type !== 'EFECTIVO' && setFoundMetodos(prev => ({ ...prev, [m.name]: e.target.value.replace(/\D/g, '') }))}
 										placeholder="0"
-										readOnly={m === 'EFECTIVO'}
+										readOnly={m.type === 'EFECTIVO'}
 									/>
 								</div>
 							))}
@@ -417,5 +420,6 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 				)}
 			</div>
 		</div>
-	);}
+	);
+}
 

@@ -205,6 +205,79 @@
   color: #fff;
 }
 
+/* Envases Overlay/Modal Styles */
+.envases-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.envases-modal {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  padding: 20px;
+  border-radius: 8px;
+  max-width: 720px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.envase-card {
+  border: 1px solid var(--color-border);
+  padding: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--color-text);
+  transition: all 0.18s ease;
+}
+
+.envase-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 8px 18px rgba(176, 116, 69, 0.08);
+  transform: translateY(-2px);
+}
+
+.envase-card-name {
+  font-weight: 700;
+}
+
+.envase-card-id {
+  color: var(--color-text-soft);
+  font-size: 13px;
+}
+
+.envase-card-price {
+  margin-top: 8px;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+/* Botones usados en modal */
+.envases-modal .btn {
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.envases-modal .btn-primary {
+  background: var(--color-primary);
+  color: var(--color-text);
+  border: none;
+}
+
+.envases-modal .btn-secondary {
+  background: var(--color-secondary);
+  color: var(--color-text);
+  border: none;
+}
+
 /* Responsive Design */
 @media (max-width: 1400px) {
   .right-panel {

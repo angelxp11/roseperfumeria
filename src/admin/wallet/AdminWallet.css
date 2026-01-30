@@ -66,6 +66,37 @@
   font-weight: 700;
 }
 
+.card-meta {
+  color: var(--color-text);
+  font-size: 12px;
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  opacity: 0.95;
+}
+
+.btn-edit-medio {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  transition: 0.2s;
+}
+
+.btn-edit-medio:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: translateY(-2px);
+}
+
 .wallet-total-section {
   background: #2a2a2a;
   border: 1px solid var(--color-border);
@@ -174,6 +205,24 @@
   box-sizing: border-box;
   transition: 0.3s;
   font-family: inherit;
+  cursor: pointer; /* añadido: pointer para indicar que es clicable */
+}
+
+/* Añadido: select con fondo negro y opciones con fondo negro y texto legible */
+.form-group select {
+  background: #000; /* fondo negro para el select cerrado/abierto */
+  color: var(--color-text);
+}
+
+.form-group select option {
+  background: #000; /* fondo negro para cada option */
+  color: var(--color-text);
+}
+
+/* Estilo para el option seleccionado (fallback para navegadores que lo soporten) */
+.form-group select option:checked {
+  background: #1a1a1a;
+  color: var(--color-primary);
 }
 
 .form-group input:focus,
@@ -258,7 +307,8 @@
 .btn-ingreso,
 .btn-retiro,
 .btn-transfer,
-.btn-pdf {
+.btn-pdf,
+.btn-crear-medio {
   padding: 14px;
   border: none;
   border-radius: 8px;
@@ -300,4 +350,47 @@
 .btn-pdf:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(111, 66, 193, 0.3);
+}
+
+.btn-crear-medio {
+  padding: 14px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: 0.3s;
+  background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+  color: white;
+}
+
+.btn-crear-medio:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(20, 160, 176, 0.25);
+}
+
+.btn-delete-medio {
+  padding: 10px 14px;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #dc3545 0%, #e5533d 100%);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+  margin-right: 8px;
+}
+
+.btn-delete-medio:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(220, 53, 69, 0.25);
+}
+
+.btn-delete-medio:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

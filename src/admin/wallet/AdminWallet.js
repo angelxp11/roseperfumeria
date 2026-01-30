@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, setDoc, getDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, getDoc, query, where, deleteDoc } from 'firebase/firestore';
 import { db } from '../../server/firebase';
 import { getAuth } from 'firebase/auth';
 import { toast } from 'react-toastify';
 import './AdminWallet.css';
-import { FaExchangeAlt, FaWallet, FaArrowUp, FaArrowDown, FaFileDownload } from 'react-icons/fa';
+import { FaExchangeAlt, FaWallet, FaArrowUp, FaArrowDown, FaFileDownload, FaPlus, FaEdit } from 'react-icons/fa'; // agregado FaEdit
 import ReportePDFBankStatement from '../../worker/Facturacion/ReportePDF/ReportePDFBankStatement.js';
 
 export default function AdminWallet() {
@@ -15,14 +15,33 @@ export default function AdminWallet() {
   const [showIngresoModal, setShowIngresoModal] = useState(false);
   const [showRetiroModal, setShowRetiroModal] = useState(false);
   const [showPdfModal, setShowPdfModal] = useState(false);
-  
+
+  // --- NUEVO: estados para crear método de pago ---
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createBalance, setCreateBalance] = useState('');
+  const [createNumber, setCreateNumber] = useState('');
+  const [createTitular, setCreateTitular] = useState('');
+  const [createType, setCreateType] = useState('');
+  const [createLoading, setCreateLoading] = useState(false);
+
+  // --- NUEVO: estados para editar método de pago ---
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editId, setEditId] = useState('');
+  const [editName, setEditName] = useState('');
+  const [editBalance, setEditBalance] = useState('');
+  const [editNumber, setEditNumber] = useState('');
+  const [editTitular, setEditTitular] = useState('');
+  const [editType, setEditType] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+
   // Transfer states
   const [fromMethod, setFromMethod] = useState('');
   const [toMethod, setToMethod] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [transferLoading, setTransferLoading] = useState(false);
-  
+
   // Ingreso/Retiro states
   const [selectedMethod, setSelectedMethod] = useState('');
   const [operationAmount, setOperationAmount] = useState('');
@@ -51,7 +70,10 @@ export default function AdminWallet() {
         methods.push({
           id: doc.id,
           name: data.name,
-          balance: Number(data.balance || 0)
+          balance: Number(data.balance || 0),
+          number: data.number || '',
+          titular: data.titular || '',
+          type: data.type || ''
         });
         balancesMap[data.name] = Number(data.balance || 0);
       });
@@ -339,6 +361,145 @@ export default function AdminWallet() {
     }
   };
 
+  // --- NUEVO: crear método de pago ---
+  const generatePaymentId = async () => {
+    // encuentra el máximo entre los IDs numéricos existentes y genera el siguiente con padding 12
+    let max = 0;
+    paymentMethods.forEach(m => {
+      if (/^\d+$/.test(m.id)) {
+        const n = Number(m.id);
+        if (n > max) max = n;
+      }
+    });
+    let next = max + 1;
+    let candidate = String(next).padStart(12, '0');
+    // asegurar unicidad consultando Firestore (evita race conditions)
+    // incrementa hasta que no exista el documento
+    while ((await getDoc(doc(db, 'PAYMENT', candidate))).exists()) {
+      next += 1;
+      candidate = String(next).padStart(12, '0');
+    }
+    return candidate;
+  };
+
+  const handleCreateMethod = async () => {
+    if (!createName || !createName.trim()) {
+      toast.error('Ingresa el nombre del método');
+      return;
+    }
+    if (createBalance === '' || Number(createBalance) < 0) {
+      toast.error('Ingresa un balance válido');
+      return;
+    }
+    // Para EFECTIVO no es necesario número/titular
+    const isEfectivoCreate = createName.trim().toUpperCase() === 'EFECTIVO';
+    if (!isEfectivoCreate) {
+      if (!createNumber || !createNumber.trim()) {
+        toast.error('Ingresa el número de cuenta');
+        return;
+      }
+      if (!createTitular || !createTitular.trim()) {
+        toast.error('Ingresa el titular');
+        return;
+      }
+    }
+    if (!createType || !createType.trim()) {
+      toast.error('Ingresa el tipo');
+      return;
+    }
+ 
+    try {
+      setCreateLoading(true);
+      const newDoc = {
+        name: createName.trim(),
+        balance: Number(createBalance) || 0,
+        number: createNumber.trim(),
+        titular: createTitular.trim(),
+        type: createType.trim()
+      };
+      const paymentId = await generatePaymentId();
+      await setDoc(doc(db, 'PAYMENT', paymentId), newDoc);
+      toast.success('✓ Método de pago creado correctamente');
+      setShowCreateModal(false);
+      setCreateName('');
+      setCreateBalance('');
+      setCreateNumber('');
+      setCreateTitular('');
+      setCreateType('');
+      fetchPaymentMethods();
+    } catch (err) {
+      console.error('Error creando método de pago:', err);
+      toast.error('Error al crear método de pago');
+    } finally {
+      setCreateLoading(false);
+    }
+   };
+
+   // Abre el modal de edición con los datos del método seleccionado
+   const openEditModal = (method) => {
+     setEditId(method.id);
+     setEditName(method.name || '');
+     setEditBalance(method.balance !== undefined ? String(method.balance) : '');
+     setEditNumber(method.number || '');
+     setEditTitular(method.titular || '');
+     setEditType(method.type || '');
+     setShowEditModal(true);
+   };
+ 
+   const handleDeleteMethod = async () => {
+     if (!editId) return;
+     const ok = window.confirm('¿Eliminar método de pago? Esta acción no se puede deshacer.');
+     if (!ok) return;
+     try {
+       setEditLoading(true);
+       await deleteDoc(doc(db, 'PAYMENT', editId));
+       toast.success('✓ Método eliminado correctamente');
+       setShowEditModal(false);
+       // limpiar y refrescar
+       setEditId(''); setEditName(''); setEditBalance(''); setEditNumber(''); setEditTitular(''); setEditType('');
+       fetchPaymentMethods();
+     } catch (err) {
+       console.error('Error eliminando método:', err);
+       toast.error('Error al eliminar método');
+     } finally {
+       setEditLoading(false);
+     }
+   };
+ 
+   const handleUpdateMethod = async () => {
+    if (!editName || !editName.trim()) { toast.error('Ingresa el nombre del método'); return; }
+    if (editBalance === '' || Number(editBalance) < 0) { toast.error('Ingresa un balance válido'); return; }
+    // Para EFECTIVO no es necesario número/titular
+    const isEfectivoEdit = editName.trim().toUpperCase() === 'EFECTIVO' || editType.trim().toUpperCase() === 'EFECTIVO';
+    if (!isEfectivoEdit) {
+      if (!editNumber || !editNumber.trim()) { toast.error('Ingresa el número de cuenta'); return; }
+      if (!editTitular || !editTitular.trim()) { toast.error('Ingresa el titular'); return; }
+    }
+    if (!editType || !editType.trim()) { toast.error('Ingresa el tipo'); return; }
+ 
+     try {
+       setEditLoading(true);
+       const payload = {
+         name: editName.trim(),
+         balance: Number(editBalance) || 0,
+         number: editNumber.trim(),
+         titular: editTitular.trim(),
+         type: editType.trim()
+       };
+       await setDoc(doc(db, 'PAYMENT', editId), payload, { merge: true });
+       toast.success('✓ Método actualizado correctamente');
+       setShowEditModal(false);
+       // limpiar y refrescar
+       setEditId(''); setEditName(''); setEditBalance(''); setEditNumber(''); setEditTitular(''); setEditType('');
+       fetchPaymentMethods();
+     } catch (err) {
+       console.error('Error actualizando método:', err);
+       toast.error('Error al actualizar método');
+     } finally {
+       setEditLoading(false);
+     }
+   };
+
   if (loading) {
     return <div className="wallet-container"><p>Cargando wallet...</p></div>;
   }
@@ -355,6 +516,17 @@ export default function AdminWallet() {
           <div key={method.id} className="balance-card">
             <div className="card-method">{method.name}</div>
             <div className="card-balance">${formatNumber(balances[method.name] || 0)}</div>
+
+            {/* meta info y botón editar */}
+            <div className="card-meta">
+              <div>
+                <span style={{ display: 'block' }}>{method.type ? method.type : ''}</span>
+                <span style={{ display: 'block', fontSize: 11 }}>{method.number ? `# ${method.number}` : ''}</span>
+              </div>
+              <button className="btn-edit-medio" onClick={() => openEditModal(method)}>
+                <FaEdit /> Editar
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -382,6 +554,12 @@ export default function AdminWallet() {
         <button className="btn-pdf" onClick={() => { setShowPdfModal(true); setPdfStartDate(''); setPdfEndDate(''); }}>
           <FaFileDownload />
           Generar PDF
+        </button>
+
+        {/* NUEVO: Botón crear método de pago */}
+        <button className="btn-crear-medio" onClick={() => { setShowCreateModal(true); setCreateName(''); setCreateBalance(''); setCreateNumber(''); setCreateTitular(''); setCreateType(''); }}>
+          <FaPlus />
+          Crear método de pago
         </button>
       </div>
 
@@ -520,7 +698,7 @@ export default function AdminWallet() {
               </div>
               <div className="transfer-summary">
                 <p><strong>De:</strong> {fromMethod} ${formatNumber(balances[fromMethod] || 0)}</p>
-                <p><strong>Monto:</strong> ${formatNumber(amount || 0)}</p>
+                <p><strong> monto:</strong> ${formatNumber(amount || 0)}</p>
                 <p><strong>Hacia:</strong> {toMethod} ${formatNumber(balances[toMethod] || 0)}</p>
               </div>
             </div>
@@ -575,6 +753,129 @@ export default function AdminWallet() {
               </button>
               <button className="btn-confirmar" onClick={handleGeneratePDF} disabled={pdfLoading || !pdfMethod || !pdfStartDate || !pdfEndDate}>
                 {pdfLoading ? 'Generando...' : 'Generar PDF'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Crear Método de Pago */}
+      {showCreateModal && (
+        <div className="transfer-modal-overlay">
+          <div className="transfer-modal">
+            <h3>Crear Método de Pago</h3>
+            <div className="transfer-form">
+              <div className="form-group">
+                <label>Nombre:</label>
+                <input
+                  type="text"
+                  value={createName}
+                  onChange={(e) => setCreateName(e.target.value)}
+                  placeholder="Nombre del método"
+                />
+              </div>
+              <div className="form-group">
+                <label>Balance inicial:</label>
+                <input
+                  type="text"
+                  value={createBalance !== '' ? formatNumber(createBalance) : ''}
+                  onChange={(e) => setCreateBalance(e.target.value.replace(/\D/g, ''))}
+                  placeholder="0"
+                  inputMode="numeric"
+                />
+              </div>
+              {/* Si el nombre es EFECTIVO, no mostramos número/titular */}
+              {createName.trim().toUpperCase() !== 'EFECTIVO' && (
+                <>
+                  <div className="form-group">
+                    <label>Número de cuenta:</label>
+                    <input
+                      type="text"
+                      value={createNumber}
+                      onChange={(e) => setCreateNumber(e.target.value)}
+                      placeholder="Número de cuenta"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Titular:</label>
+                    <input
+                      type="text"
+                      value={createTitular}
+                      onChange={(e) => setCreateTitular(e.target.value)}
+                      placeholder="Titular de la cuenta"
+                    />
+                  </div>
+                </>
+              )}
+              
+              <div className="form-group">
+                <label>Tipo:</label>
+                <input
+                  type="text"
+                  value={createType}
+                  onChange={(e) => setCreateType(e.target.value)}
+                  placeholder="Ej: bancaria, efectivo, etc."
+                />
+              </div>
+            </div>
+            <div className="modal-buttons">
+              <button className="btn-cancelar" onClick={() => setShowCreateModal(false)} disabled={createLoading}>
+                Cancelar
+              </button>
+              <button className="btn-confirmar" onClick={handleCreateMethod} disabled={createLoading || !createName.trim() || !createType.trim() || (createName.trim().toUpperCase() !== 'EFECTIVO' && (!createNumber.trim() || !createTitular.trim()))}>
+                {createLoading ? 'Creando...' : 'Crear Método'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Método de Pago */}
+      {showEditModal && (
+        <div className="transfer-modal-overlay">
+          <div className="transfer-modal">
+            <h3>Editar Método de Pago</h3>
+            <div className="transfer-form">
+              <div className="form-group">
+                <label>Nombre:</label>
+                <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Nombre del método" />
+              </div>
+              <div className="form-group">
+                <label>Balance:</label>
+                <input
+                  type="text"
+                  value={editBalance !== '' ? formatNumber(editBalance) : ''}
+                  onChange={(e) => setEditBalance(e.target.value.replace(/\D/g, ''))}
+                  placeholder="0"
+                  inputMode="numeric"
+                />
+              </div>
+              {/* Para EFECTIVO ocultamos número/titular */}
+              {editName.trim().toUpperCase() !== 'EFECTIVO' && (
+                <>
+                  <div className="form-group">
+                    <label>Número de cuenta:</label>
+                    <input type="text" value={editNumber} onChange={(e) => setEditNumber(e.target.value)} placeholder="Número de cuenta" />
+                  </div>
+                  <div className="form-group">
+                    <label>Titular:</label>
+                    <input type="text" value={editTitular} onChange={(e) => setEditTitular(e.target.value)} placeholder="Titular" />
+                  </div>
+                </>
+              )}
+              
+              <div className="form-group">
+                <label>Tipo:</label>
+                <input type="text" value={editType} onChange={(e) => setEditType(e.target.value)} placeholder="Ej: bancaria, efectivo, etc." />
+              </div>
+            </div>
+            <div className="modal-buttons">
+              <button className="btn-cancelar" onClick={() => setShowEditModal(false)} disabled={editLoading}>Cancelar</button>
+              <button className="btn-delete-medio" onClick={handleDeleteMethod} disabled={editLoading}>
+                {editLoading ? '...' : 'Eliminar'}
+              </button>
+              <button className="btn-confirmar" onClick={handleUpdateMethod} disabled={editLoading || !editName.trim() || !editType.trim() || (editName.trim().toUpperCase() !== 'EFECTIVO' && (!editNumber.trim() || !editTitular.trim()))}>
+                {editLoading ? 'Guardando...' : 'Guardar Cambios'}
               </button>
             </div>
           </div>
