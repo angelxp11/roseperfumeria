@@ -258,17 +258,35 @@ export default function AdminInventario() {
         };
 
         if (tieneFormulas) {
-          // Añadir campos de fórmula y eliminar stock/price si existieran
-          dataToUpdate.idFormulas = formData.idFormulas;
-          dataToUpdate.idEsencia = formData.idEsencia;
-          dataToUpdate.formulasPrices = formData.formulasPrices;
-          dataToUpdate.stock = deleteField();
-          dataToUpdate.price = deleteField();
+          // Al editar un producto con fórmula guardamos idFormula (singular) y price,
+          // eliminamos campos pluralizados para mantener consistencia y ponemos stock = 0
+          if (formData.idFormulas.length !== 1) {
+            toast.error('Para editar un producto con fórmula, selecciona exactamente una fórmula.');
+            setLoading(false);
+            return;
+          }
+          const formulaId = formData.idFormulas[0];
+          const precio = parseFloat(formData.formulasPrices[formulaId]);
+          if (isNaN(precio)) {
+            toast.error('Por favor ingresa un precio válido para la fórmula seleccionada');
+            setLoading(false);
+            return;
+          }
+
+          dataToUpdate.idFormula = formulaId;
+          dataToUpdate.price = precio;
+          dataToUpdate.idEsencia = formData.idEsencia || deleteField();
+          dataToUpdate.stock = 0;
+
+          // Eliminar posibles campos plurales que no usamos en cada documento individual
+          dataToUpdate.idFormulas = deleteField();
+          dataToUpdate.formulasPrices = deleteField();
         } else {
           // Producto sin fórmula: eliminar campos relacionados con fórmulas si existen
           dataToUpdate.idFormulas = deleteField();
           dataToUpdate.idEsencia = deleteField();
           dataToUpdate.formulasPrices = deleteField();
+          dataToUpdate.idFormula = deleteField(); // eliminar idFormula si existía antes
           dataToUpdate.stock = parseInt(formData.stock);
           dataToUpdate.price = parseFloat(formData.price);
         }

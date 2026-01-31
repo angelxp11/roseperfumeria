@@ -263,6 +263,82 @@ export default function Facturas() {
     setModalCancelar(true);
   };
 
+  // NEW: Restaurar stock para los productos de una factura
+  const restaurarStockPorProductos = async (productos = []) => {
+    try {
+      if (!Array.isArray(productos) || productos.length === 0) return;
+
+      for (const prod of productos) {
+        const cantidad = Number(prod.cantidad) || 0;
+        if (cantidad <= 0) continue;
+
+        // Caso: producto con fórmula -> restaurar INSUMOS y ESENCIA si es posible
+        if (prod.idFormula) {
+          try {
+            const formulaRef = doc(db, 'FORMULAS', prod.idFormula);
+            const formulaSnap = await getDoc(formulaRef);
+            if (formulaSnap.exists()) {
+              const formula = formulaSnap.data();
+
+              const insumos = [
+                { id: 'ALCOHOL', campo: 'alcohol' },
+                { id: 'FIJADOR', campo: 'fijadorgr' },
+                { id: 'FEROMONAS', campo: 'feromonasgotas' }
+              ];
+
+              for (const insumo of insumos) {
+                const valorPorUnidad = Number(formula[insumo.campo]) || 0;
+                const total = valorPorUnidad * cantidad;
+                if (total > 0) {
+                  try {
+                    const ref = doc(db, 'INSUMOS', insumo.id);
+                    await updateDoc(ref, { stock: increment(total) });
+                  } catch (err) {
+                    console.error(`Error restaurando insumo ${insumo.id}:`, err);
+                  }
+                }
+              }
+
+              // Esencia: requiere id de esencia en el producto (si lo tenemos)
+              const idEsencia = prod.idEsencia || null;
+              const esenciagr = Number(formula.esenciagr) || 0;
+              if (idEsencia && esenciagr > 0) {
+                try {
+                  const refEs = doc(db, 'ESENCIA', idEsencia);
+                  await updateDoc(refEs, { stock: increment(esenciagr * cantidad) });
+                } catch (err) {
+                  console.error('Error restaurando ESENCIA:', err);
+                }
+              }
+            }
+          } catch (err) {
+            console.error('Error procesando fórmula para restaurar stock:', err);
+          }
+        }
+
+        // Caso: producto con documento en PRODUCTOS -> incrementar stock
+        if (prod.documentId) {
+          try {
+            const prodRef = doc(db, 'PRODUCTOS', prod.documentId);
+            await updateDoc(prodRef, { stock: increment(cantidad) });
+          } catch (err) {
+            console.error('Error restaurando stock de PRODUCTOS:', err);
+          }
+        } else if (prod.id && prod.id !== 'N/A') {
+          // fallback: intentar con prod.id si no existe documentId
+          try {
+            const prodRef = doc(db, 'PRODUCTOS', prod.id);
+            await updateDoc(prodRef, { stock: increment(cantidad) });
+          } catch (err) {
+            // puede que no sea un id válido; ignorar sin romper el proceso
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error en restaurarStockPorProductos:', err);
+    }
+  };
+
   const cancelarFactura = async () => {
     if (!motivoCancelacion.trim()) {
       toast.warning('Debes ingresar un motivo de cancelación');
@@ -278,6 +354,7 @@ export default function Facturas() {
         const data = docSnap.data();
         const montoTotal = data[facturaCancelar.facturaId].total || 0;
         const metodoPago = data[facturaCancelar.facturaId].metodo_pago;
+        const productosFactura = data[facturaCancelar.facturaId].productos || [];
 
         const facturaActualizada = {
           ...data[facturaCancelar.facturaId],
@@ -294,6 +371,9 @@ export default function Facturas() {
 
         // Actualizar factura
         await updateDoc(docRef, nuevosData);
+
+        // NEW: Restaurar stock de los productos (si aplica)
+        await restaurarStockPorProductos(productosFactura);
 
         // Decrementar dinero de la caja según método de pago
         if (metodoPago) {

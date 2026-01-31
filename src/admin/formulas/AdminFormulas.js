@@ -122,8 +122,14 @@ export default function AdminFormulas() {
 
     try {
       setLoading(true);
-      const idFormula = formData.id || generarIdIncremental();
-      
+      // El ID debe ser provisto manualmente (no se genera automáticamente)
+      if (!formData.id) {
+        toast.error('Por favor ingresa el ID de la fórmula (es obligatorio)');
+        setLoading(false);
+        return;
+      }
+      const idFormula = formData.id;
+
       if (editingId) {
         const docRef = doc(db, 'FORMULAS', editingId);
         await updateDoc(docRef, {
@@ -228,18 +234,20 @@ export default function AdminFormulas() {
     try {
       const datosFormato = [
         {
-          ID: '00000001',
+          ID: 'HOLA', // ejemplo de ID string libre
           Alcohol: 8,
           Esencia: 15,
           Feromonas: 5,
-          Fijador: 2
+          Fijador: 2,
+          Envases: '[000000000026-000000000027-000000000028-000000000029-000000000028-30]' // ejemplo con múltiples ids
         },
         {
           ID: '00000002',
           Alcohol: 10,
           Esencia: 20,
           Feromonas: 6,
-          Fijador: 3
+          Fijador: 3,
+          Envases: '' // vacío si no aplica
         }
       ];
 
@@ -252,7 +260,8 @@ export default function AdminFormulas() {
         { wch: 12 },
         { wch: 12 },
         { wch: 14 },
-        { wch: 12 }
+        { wch: 12 },
+        { wch: 40 } // ancho mayor para Envases largos
       ];
 
       XLSX.writeFile(wb, 'plantilla_formulas.xlsx');
@@ -261,6 +270,17 @@ export default function AdminFormulas() {
       console.error('Error:', err);
       toast.error('Error al descargar la plantilla');
     }
+  };
+
+  // Nuevo: parsea la columna Envases y devuelve array de ids (preserva ceros y texto)
+  const parseEnvases = (raw) => {
+    if (!raw && raw !== 0) return [];
+    const s = String(raw).trim();
+    // Quita corchetes/parentesis al inicio/fin si existen
+    const inner = s.replace(/^\s*[\[\(\{]\s*/, '').replace(/\s*[\]\)\}]\s*$/, '');
+    // Separadores: '-', ',' o ';' (acepta múltiples)
+    const parts = inner.split(/[-,;]+/).map(p => p.trim()).filter(Boolean);
+    return parts;
   };
 
   const importarExcel = (e) => {
@@ -277,23 +297,38 @@ export default function AdminFormulas() {
 
         setLoading(true);
         let importados = 0;
+        let omitidosSinId = 0;
         
         for (const row of jsonData) {
           if (row.Alcohol !== undefined && row.Esencia !== undefined && row.Feromonas !== undefined && row.Fijador !== undefined) {
-            const idFormula = row.ID ? row.ID.toString().padStart(8, '0') : generarIdIncremental();
+            // Requerir ID explícito en el Excel; omitir filas sin ID
+            if (row.ID === undefined || row.ID === null || String(row.ID).trim() === '') {
+              omitidosSinId++;
+              continue;
+            }
+            // Usar el ID tal cual viene (string), sin padStart
+            const idFormula = String(row.ID).trim();
             const docRef = doc(db, 'FORMULAS', idFormula);
+
+            // Parsear envases (ahora soporta varios separados por '-')
+            const envasesRaw = row.Envases || row.Envase || '';
+            const envaseArray = parseEnvases(envasesRaw);
+
             await setDoc(docRef, {
               id: idFormula,
               alcohol: parseInt(row.Alcohol),
               esenciagr: parseInt(row.Esencia),
               feromonasgotas: parseInt(row.Feromonas),
-              fijadorgr: parseInt(row.Fijador)
+              fijadorgr: parseInt(row.Fijador),
+              envase: envaseArray // guarda array vacío si no hay envases
             });
             importados++;
           }
         }
 
-        toast.success(`${importados} fórmulas importadas correctamente`);
+        let msg = `${importados} fórmulas importadas correctamente`;
+        if (omitidosSinId) msg += ` — ${omitidosSinId} fila(s) omitida(s) por no tener ID`;
+        toast.success(msg);
         setShowImportModal(false);
         cargarFormulas();
       } catch (err) {
@@ -436,7 +471,7 @@ export default function AdminFormulas() {
                   name="id" 
                   value={formData.id}
                   onChange={handleInputChange}
-                  placeholder={`Próximo ID: ${generarIdIncremental()}`}
+                  placeholder="Ej: HOLA o 00000001 (OBLIGATORIO)"
                 />
               </div>
               <div className="form-group">
@@ -558,6 +593,7 @@ export default function AdminFormulas() {
                         <th>Columna C</th>
                         <th>Columna D</th>
                         <th>Columna E</th>
+                        <th>Columna F</th> {/* Nueva columna para Envases */}
                       </tr>
                     </thead>
                     <tbody>
@@ -567,6 +603,7 @@ export default function AdminFormulas() {
                         <td className="header-cell">Esencia</td>
                         <td className="header-cell">Feromonas</td>
                         <td className="header-cell">Fijador</td>
+                        <td className="header-cell">Envases</td> {/* Nueva cabecera */}
                       </tr>
                       <tr>
                         <td className="type-cell">String (8 dígitos)</td>
@@ -574,6 +611,7 @@ export default function AdminFormulas() {
                         <td className="type-cell">Número</td>
                         <td className="type-cell">Número</td>
                         <td className="type-cell">Número</td>
+                        <td className="type-cell">String (opcional)</td> {/* Tipo para Envases */}
                       </tr>
                       <tr>
                         <td className="example-cell">00000001</td>
@@ -581,6 +619,7 @@ export default function AdminFormulas() {
                         <td className="example-cell">15</td>
                         <td className="example-cell">5</td>
                         <td className="example-cell">2</td>
+                        <td className="example-cell">[00001-00002]</td> {/* Ejemplo de Envases */}
                       </tr>
                       <tr>
                         <td className="example-cell">00000002</td>
@@ -588,6 +627,7 @@ export default function AdminFormulas() {
                         <td className="example-cell">20</td>
                         <td className="example-cell">6</td>
                         <td className="example-cell">3</td>
+                        <td className="example-cell">''</td> {/* Ejemplo vacío */}
                       </tr>
                     </tbody>
                   </table>
@@ -596,11 +636,12 @@ export default function AdminFormulas() {
                 <div className="import-notes">
                   <h5>📝 Notas importantes:</h5>
                   <ul>
-                    <li><strong>ID:</strong> Debe tener 8 dígitos con ceros a la izquierda. Se genera automáticamente si está vacío.</li>
+                    <li><strong>ID:</strong> Debe proveerse explícitamente (puede ser texto o números). No se genera automáticamente.</li>
                     <li><strong>Alcohol:</strong> Número entero positivo en gramos obligatorio.</li>
                     <li><strong>Esencia:</strong> Número entero positivo en gramos obligatorio.</li>
                     <li><strong>Feromonas:</strong> Número entero positivo en gotas obligatorio.</li>
                     <li><strong>Fijador:</strong> Número entero positivo en gramos obligatorio.</li>
+                    <li><strong>Envases:</strong> Campo opcional. Si incluye envases, deben ir en formato [00001-00002] (IDs separados por '-'). Se importarán como un array de IDs.</li>
                   </ul>
                 </div>
               </div>

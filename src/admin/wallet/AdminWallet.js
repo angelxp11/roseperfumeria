@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, setDoc, getDoc, query, where, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, getDoc, query, where, deleteDoc, onSnapshot, runTransaction } from 'firebase/firestore';
 import { db } from '../../server/firebase';
 import { getAuth } from 'firebase/auth';
 import { toast } from 'react-toastify';
@@ -35,6 +35,10 @@ export default function AdminWallet() {
   const [createType, setCreateType] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
 
+  // NUEVO: imagen seleccionada para crear/editar método
+  const [createImage, setCreateImage] = useState('');
+  const [editImage, setEditImage] = useState('');
+
   // --- NUEVO: estados para editar método de pago ---
   const [showEditModal, setShowEditModal] = useState(false);
   const [editId, setEditId] = useState('');
@@ -64,49 +68,41 @@ export default function AdminWallet() {
   const [pdfEndDate, setPdfEndDate] = useState('');
   const [pdfLoading, setPdfLoading] = useState(false);
 
+  // Suscripción en tiempo real a PAYMENT
   useEffect(() => {
-    fetchPaymentMethods();
-  }, []);
-
-  const fetchPaymentMethods = async () => {
-    try {
-      setLoading(true);
-      const snap = await getDocs(collection(db, 'PAYMENT'));
+    setLoading(true);
+    const q = collection(db, 'PAYMENT');
+    const unsubscribe = onSnapshot(q, (snap) => {
       const methods = [];
       const balancesMap = {};
-      
-      snap.forEach(doc => {
-        const data = doc.data();
+      snap.forEach(d => {
+        const data = d.data();
         methods.push({
-          id: doc.id,
+          id: d.id,
           name: data.name,
           balance: Number(data.balance || 0),
           number: data.number || '',
           titular: data.titular || '',
-          type: data.type || ''
+          type: data.type || '',
+          image: data.image || ''
         });
         balancesMap[data.name] = Number(data.balance || 0);
       });
-      
       setPaymentMethods(methods);
       setBalances(balancesMap);
-      
-      // Set default methods if available
-      if (methods.length >= 2) {
-        setFromMethod(methods[0].name);
-        setToMethod(methods[1].name);
-      }
-      if (methods.length >= 1) {
-        setSelectedMethod(methods[0].name);
-        setPdfMethod(methods[0].name);
-      }
-    } catch (err) {
-      console.error('Error al cargar métodos de pago:', err);
-      toast.error('Error al cargar métodos de pago');
-    } finally {
+      // Set defaults solo si no existen (no sobreescribir selección del usuario)
+      setFromMethod(prev => prev || (methods[0]?.name || ''));
+      setToMethod(prev => prev || (methods[1]?.name || ''));
+      setSelectedMethod(prev => prev || (methods[0]?.name || ''));
+      setPdfMethod(prev => prev || (methods[0]?.name || ''));
       setLoading(false);
-    }
-  };
+    }, (err) => {
+      console.error('Error escuchando PAYMENT:', err);
+      toast.error('Error al recibir actualizaciones de métodos de pago');
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const getFechaHoyId = () => {
     const d = new Date();
@@ -157,19 +153,11 @@ export default function AdminWallet() {
     try {
       setOperationLoading(true);
       const fechaHoyId = getFechaHoyId();
-      const paymentDoc = paymentMethods.find(m => m.name === selectedMethod);
-
-      // Saldo anterior y posterior
-      const saldoAnterior = balances[selectedMethod];
-      const saldoPosterior = saldoAnterior + Number(operationAmount);
-
-      // Update PAYMENT balance
-      await setDoc(doc(db, 'PAYMENT', paymentDoc.id), {
-        balance: saldoPosterior
-      }, { merge: true });
-
-      // Register in MOVIMIENTOSPAYMENT
       const empleadoNombre = await obtenerNombreEmpleado();
+      const paymentDoc = paymentMethods.find(m => m.name === selectedMethod);
+      if (!paymentDoc) throw new Error('Método de pago no encontrado');
+
+      const paymentRef = doc(db, 'PAYMENT', paymentDoc.id);
       const movRef = doc(db, 'MOVIMIENTOSPAYMENT', fechaHoyId);
       const movId = String(Date.now());
       const movObj = {
@@ -177,18 +165,22 @@ export default function AdminWallet() {
         tipo: 'INGRESO',
         metodo: selectedMethod,
         monto: Number(operationAmount),
-        saldoAnterior,
-        saldoPosterior,
         descripcion: `Ingreso de $${formatNumber(operationAmount)} a ${selectedMethod}. ${operationDesc ? `Motivo: ${operationDesc}` : ''} Realizado por ${empleadoNombre}.`
       };
 
-      await setDoc(movRef, { [movId]: movObj }, { merge: true });
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(paymentRef);
+        if (!snap.exists()) throw new Error('Método no encontrado en transacción');
+        const saldoAnterior = Number(snap.data().balance || 0);
+        const saldoPosterior = saldoAnterior + Number(operationAmount);
+        transaction.update(paymentRef, { balance: saldoPosterior });
+        transaction.set(movRef, { [movId]: { ...movObj, saldoAnterior, saldoPosterior } }, { merge: true });
+      });
 
       toast.success('✓ Ingreso realizado correctamente');
       setShowIngresoModal(false);
       setOperationAmount('');
       setOperationDesc('');
-      fetchPaymentMethods();
     } catch (err) {
       console.error('Error en ingreso:', err);
       toast.error('Error al realizar el ingreso');
@@ -217,19 +209,11 @@ export default function AdminWallet() {
     try {
       setOperationLoading(true);
       const fechaHoyId = getFechaHoyId();
-      const paymentDoc = paymentMethods.find(m => m.name === selectedMethod);
-
-      // Saldo anterior y posterior
-      const saldoAnterior = balances[selectedMethod];
-      const saldoPosterior = saldoAnterior - Number(operationAmount);
-
-      // Update PAYMENT balance
-      await setDoc(doc(db, 'PAYMENT', paymentDoc.id), {
-        balance: saldoPosterior
-      }, { merge: true });
-
-      // Register in MOVIMIENTOSPAYMENT
       const empleadoNombre = await obtenerNombreEmpleado();
+      const paymentDoc = paymentMethods.find(m => m.name === selectedMethod);
+      if (!paymentDoc) throw new Error('Método de pago no encontrado');
+
+      const paymentRef = doc(db, 'PAYMENT', paymentDoc.id);
       const movRef = doc(db, 'MOVIMIENTOSPAYMENT', fechaHoyId);
       const movId = String(Date.now());
       const movObj = {
@@ -237,18 +221,23 @@ export default function AdminWallet() {
         tipo: 'RETIRO',
         metodo: selectedMethod,
         monto: Number(operationAmount),
-        saldoAnterior,
-        saldoPosterior,
         descripcion: `Retiro de $${formatNumber(operationAmount)} de ${selectedMethod}. ${operationDesc ? `Motivo: ${operationDesc}` : ''} Realizado por ${empleadoNombre}.`
       };
 
-      await setDoc(movRef, { [movId]: movObj }, { merge: true });
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(paymentRef);
+        if (!snap.exists()) throw new Error('Método no encontrado en transacción');
+        const saldoAnterior = Number(snap.data().balance || 0);
+        if (Number(operationAmount) > saldoAnterior) throw new Error('Saldo insuficiente en transacción');
+        const saldoPosterior = saldoAnterior - Number(operationAmount);
+        transaction.update(paymentRef, { balance: saldoPosterior });
+        transaction.set(movRef, { [movId]: { ...movObj, saldoAnterior, saldoPosterior } }, { merge: true });
+      });
 
       toast.success('✓ Retiro realizado correctamente');
       setShowRetiroModal(false);
       setOperationAmount('');
       setOperationDesc('');
-      fetchPaymentMethods();
     } catch (err) {
       console.error('Error en retiro:', err);
       toast.error('Error al realizar el retiro');
@@ -282,53 +271,41 @@ export default function AdminWallet() {
     try {
       setTransferLoading(true);
       const fechaHoyId = getFechaHoyId();
+      const fromDoc = paymentMethods.find(m => m.name === fromMethod);
+      const toDoc = paymentMethods.find(m => m.name === toMethod);
+      if (!fromDoc || !toDoc) throw new Error('Método origen/destino no encontrado');
+      const fromRef = doc(db, 'PAYMENT', fromDoc.id);
+      const toRef = doc(db, 'PAYMENT', toDoc.id);
       const movRef = doc(db, 'MOVIMIENTOSPAYMENT', fechaHoyId);
-
-      // Update balances in PAYMENT collection
-      const fromPaymentDoc = paymentMethods.find(m => m.name === fromMethod);
-      const toPaymentDoc = paymentMethods.find(m => m.name === toMethod);
-
-      // Saldo anterior y posterior para ambos métodos
-      const saldoAnteriorDesde = balances[fromMethod];
-      const saldoPosteriorDesde = saldoAnteriorDesde - Number(amount);
-      const saldoAnteriorHacia = balances[toMethod];
-      const saldoPosteriorHacia = saldoAnteriorHacia + Number(amount);
-
-      if (fromPaymentDoc) {
-        await setDoc(doc(db, 'PAYMENT', fromPaymentDoc.id), {
-          balance: saldoPosteriorDesde
-        }, { merge: true });
-      }
-
-      if (toPaymentDoc) {
-        await setDoc(doc(db, 'PAYMENT', toPaymentDoc.id), {
-          balance: saldoPosteriorHacia
-        }, { merge: true });
-      }
-
-      // Register in MOVIMIENTOSPAYMENT
       const empleadoNombre = await obtenerNombreEmpleado();
       const movId = String(Date.now());
-      const movObj = {
+      const movObjBase = {
         momento: new Date().toISOString(),
         tipo: 'TRANSFERENCIA',
         desde: fromMethod,
         hacia: toMethod,
         monto: Number(amount),
-        saldoAnteriorDesde,
-        saldoPosteriorDesde,
-        saldoAnteriorHacia,
-        saldoPosteriorHacia,
         descripcion: `Transferencia de $${formatNumber(amount)} de ${fromMethod} a ${toMethod}. ${description ? `Motivo: ${description}` : ''} Realizado por ${empleadoNombre}.`
       };
 
-      await setDoc(movRef, { [movId]: movObj }, { merge: true });
+      await runTransaction(db, async (transaction) => {
+        const sFrom = await transaction.get(fromRef);
+        const sTo = await transaction.get(toRef);
+        if (!sFrom.exists() || !sTo.exists()) throw new Error('Documento no existe en transacción');
+        const saldoAnteriorDesde = Number(sFrom.data().balance || 0);
+        const saldoAnteriorHacia = Number(sTo.data().balance || 0);
+        if (Number(amount) > saldoAnteriorDesde) throw new Error('Saldo insuficiente en transacción');
+        const saldoPosteriorDesde = saldoAnteriorDesde - Number(amount);
+        const saldoPosteriorHacia = saldoAnteriorHacia + Number(amount);
+        transaction.update(fromRef, { balance: saldoPosteriorDesde });
+        transaction.update(toRef, { balance: saldoPosteriorHacia });
+        transaction.set(movRef, { [movId]: { ...movObjBase, saldoAnteriorDesde, saldoPosteriorDesde, saldoAnteriorHacia, saldoPosteriorHacia } }, { merge: true });
+      });
 
       toast.success('✓ Transferencia realizada correctamente');
       setShowTransferModal(false);
       setAmount('');
       setDescription('');
-      fetchPaymentMethods();
     } catch (err) {
       console.error('Error en transferencia:', err);
       toast.error('Error al realizar la transferencia');
@@ -401,8 +378,8 @@ export default function AdminWallet() {
       toast.error('Ingresa un balance válido');
       return;
     }
-    // Para EFECTIVO no es necesario número/titular
-    const isEfectivoCreate = createName.trim().toUpperCase() === 'EFECTIVO';
+    // Para EFECTIVO no es necesario número/titular (decidimos por el tipo seleccionado)
+    const isEfectivoCreate = (createType || '').trim().toUpperCase() === 'EFECTIVO';
     if (!isEfectivoCreate) {
       if (!createNumber || !createNumber.trim()) {
         toast.error('Ingresa el número de cuenta');
@@ -413,7 +390,7 @@ export default function AdminWallet() {
         return;
       }
     }
-    if (!createType || !createType.trim()) {
+    if (!createType || !(createType || '').trim()) {
       toast.error('Ingresa el tipo');
       return;
     }
@@ -425,7 +402,8 @@ export default function AdminWallet() {
         balance: Number(createBalance) || 0,
         number: createNumber.trim(),
         titular: createTitular.trim(),
-        type: createType.trim()
+        type: createType.trim(),
+        image: createImage ? createImage.trim() : '' // <-- guardar clave de imagen
       };
       const paymentId = await generatePaymentId();
       await setDoc(doc(db, 'PAYMENT', paymentId), newDoc);
@@ -436,7 +414,7 @@ export default function AdminWallet() {
       setCreateNumber('');
       setCreateTitular('');
       setCreateType('');
-      fetchPaymentMethods();
+      setCreateImage('');
     } catch (err) {
       console.error('Error creando método de pago:', err);
       toast.error('Error al crear método de pago');
@@ -453,6 +431,7 @@ export default function AdminWallet() {
      setEditNumber(method.number || '');
      setEditTitular(method.titular || '');
      setEditType(method.type || '');
+     setEditImage(method.image || ''); // <-- cargar imagen existente
      setShowEditModal(true);
    };
  
@@ -467,7 +446,6 @@ export default function AdminWallet() {
        setShowEditModal(false);
        // limpiar y refrescar
        setEditId(''); setEditName(''); setEditBalance(''); setEditNumber(''); setEditTitular(''); setEditType('');
-       fetchPaymentMethods();
      } catch (err) {
        console.error('Error eliminando método:', err);
        toast.error('Error al eliminar método');
@@ -479,13 +457,13 @@ export default function AdminWallet() {
    const handleUpdateMethod = async () => {
     if (!editName || !editName.trim()) { toast.error('Ingresa el nombre del método'); return; }
     if (editBalance === '' || Number(editBalance) < 0) { toast.error('Ingresa un balance válido'); return; }
-    // Para EFECTIVO no es necesario número/titular
-    const isEfectivoEdit = editName.trim().toUpperCase() === 'EFECTIVO' || editType.trim().toUpperCase() === 'EFECTIVO';
+    // Para EFECTIVO no es necesario número/titular (decidido por el tipo)
+    const isEfectivoEdit = (editType || '').trim().toUpperCase() === 'EFECTIVO';
     if (!isEfectivoEdit) {
       if (!editNumber || !editNumber.trim()) { toast.error('Ingresa el número de cuenta'); return; }
       if (!editTitular || !editTitular.trim()) { toast.error('Ingresa el titular'); return; }
     }
-    if (!editType || !editType.trim()) { toast.error('Ingresa el tipo'); return; }
+    if (!editType || !(editType || '').trim()) { toast.error('Ingresa el tipo'); return; }
  
      try {
        setEditLoading(true);
@@ -494,14 +472,15 @@ export default function AdminWallet() {
          balance: Number(editBalance) || 0,
          number: editNumber.trim(),
          titular: editTitular.trim(),
-         type: editType.trim()
+         type: editType.trim(),
+         image: editImage ? editImage.trim() : '' // <-- guardar clave de imagen
        };
        await setDoc(doc(db, 'PAYMENT', editId), payload, { merge: true });
        toast.success('✓ Método actualizado correctamente');
        setShowEditModal(false);
        // limpiar y refrescar
        setEditId(''); setEditName(''); setEditBalance(''); setEditNumber(''); setEditTitular(''); setEditType('');
-       fetchPaymentMethods();
+       setEditImage('');
      } catch (err) {
        console.error('Error actualizando método:', err);
        toast.error('Error al actualizar método');
@@ -510,22 +489,17 @@ export default function AdminWallet() {
      }
    };
 
-  // Helper para obtener imagen de método; intenta varias variantes y devuelve '' si no existe
+  // Mejorado: buscar imagen por clave/nombre en import images
   const getImageForMethod = (name) => {
     if (!name) return '';
-    const candidates = [
-      `${name}.png`,
-      `${name}.jpg`,
-      `${name}.jpeg`,
-      `${name}.svg`,
-      `${name.toLowerCase()}.png`,
-      `${name.replace(/\s+/g, '').toLowerCase()}.png`,
-      `${name.replace(/\s+/g, '_').toLowerCase()}.png`,
-    ];
-    for (const c of candidates) {
-      if (images[c]) return images[c];
-    }
-    return images['default.png'] || '';
+    // si ya es la clave exacta
+    if (images[name]) return images[name];
+    const key = String(name).trim().toUpperCase().replace(/\s+/g, '');
+    if (images[key]) return images[key];
+    // fallback: intentar variantes básicas
+    const alt = String(name).trim().toUpperCase();
+    if (images[alt]) return images[alt];
+    return '';
   };
 
   if (loading) {
@@ -541,31 +515,32 @@ export default function AdminWallet() {
 
       <div className="balance-cards">
         {paymentMethods.map((method) => (
-          <div key={method.id} className="balance-card">
-            {/* Mostrar icono si existe */}
-            {getImageForMethod(method.name) && (
-              <img
-                src={getImageForMethod(method.name)}
-                alt={`${method.name} icon`}
-                style={{ width: 40, height: 40, objectFit: 'contain', marginRight: 8 }}
-              />
-            )}
-            <div className="card-method">{method.name}</div>
-            <div className="card-balance">${formatNumber(balances[method.name] || 0)}</div>
-
-            {/* meta info y botón editar */}
-            <div className="card-meta">
-              <div>
-                <span style={{ display: 'block' }}>{method.type ? method.type : ''}</span>
-                <span style={{ display: 'block', fontSize: 11 }}>{method.number ? `# ${method.number}` : ''}</span>
+          <div
+            key={method.id}
+            className={`balance-card ${method.image || getImageForMethod(method.name) ? 'background-image' : ''}`}
+            style={ (method.image && getImageForMethod(method.image)) || getImageForMethod(method.name) ? { backgroundImage: `url(${ getImageForMethod(method.image || method.name) })` } : {} }
+          >
+            <div className="card-content">
+              {/* Si no hay imagen de fondo, mostrar icono pequeño */}
+              {!((method.image && getImageForMethod(method.image)) || getImageForMethod(method.name)) && getImageForMethod(method.name) && (
+                <img src={getImageForMethod(method.name)} alt={`${method.name} icon`} style={{ width: 40, height: 40, objectFit: 'contain', marginRight: 8 }} />
+              )}
+              <div className="card-method">{method.name}</div>
+              <div className="card-balance">${formatNumber(balances[method.name] || 0)}</div>
+              {/* meta info y botón editar */}
+              <div className="card-meta">
+                <div>
+                  <span style={{ display: 'block' }}>{method.type ? method.type : ''}</span>
+                  <span style={{ display: 'block', fontSize: 11 }}>{method.number ? `# ${method.number}` : ''}</span>
+                </div>
+                <button className="btn-edit-medio" onClick={() => openEditModal(method)}>
+                  <FaEdit /> Editar
+                </button>
               </div>
-              <button className="btn-edit-medio" onClick={() => openEditModal(method)}>
-                <FaEdit /> Editar
-              </button>
             </div>
           </div>
-        ))}
-      </div>
+         ))}
+       </div>
 
       <div className="wallet-total-section">
         <h3>Acumulacion de cuentas:</h3>
@@ -820,8 +795,18 @@ export default function AdminWallet() {
                   inputMode="numeric"
                 />
               </div>
-              {/* Si el nombre es EFECTIVO, no mostramos número/titular */}
-              {createName.trim().toUpperCase() !== 'EFECTIVO' && (
+              <div className="form-group">
+                <label>Tipo:</label>
+                <select value={createType} onChange={(e) => setCreateType(e.target.value)}>
+                  <option value="">Selecciona un tipo</option>
+                  <option value="AHORRO">AHORRO</option>
+                  <option value="EFECTIVO">EFECTIVO</option>
+                  <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                </select>
+              </div>
+              
+              {/* Si el tipo es EFECTIVO, no mostramos número/titular */}
+              {(createType || '').trim().toUpperCase() !== 'EFECTIVO' && (
                 <>
                   <div className="form-group">
                     <label>Número de cuenta:</label>
@@ -844,21 +829,32 @@ export default function AdminWallet() {
                 </>
               )}
               
-              <div className="form-group">
-                <label>Tipo:</label>
-                <input
-                  type="text"
-                  value={createType}
-                  onChange={(e) => setCreateType(e.target.value)}
-                  placeholder="Ej: bancaria, efectivo, etc."
-                />
-              </div>
+             <div className="form-group">
+               <label>Seleccionar imagen (opcional):</label>
+               <div className="preset-grid">
+                 {Object.keys(images).map((k) => (
+                   <button
+                     key={k}
+                     type="button"
+                     className={`preset-thumb ${createImage === k ? 'selected' : ''}`}
+                     onClick={() => setCreateImage(createImage === k ? '' : k)}
+                     style={{ backgroundImage: `url(${images[k]})` }}
+                   />
+                 ))}
+               </div>
+               {createImage && (
+                 <div className="preview-row" style={{ marginTop: 8 }}>
+                   <div className="preview-img" style={{ backgroundImage: `url(${getImageForMethod(createImage)})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                   <button className="btn-remove-img" onClick={() => setCreateImage('')}>Quitar</button>
+                 </div>
+               )}
+             </div>
             </div>
             <div className="modal-buttons">
               <button className="btn-cancelar" onClick={() => setShowCreateModal(false)} disabled={createLoading}>
                 Cancelar
               </button>
-              <button className="btn-confirmar" onClick={handleCreateMethod} disabled={createLoading || !createName.trim() || !createType.trim() || (createName.trim().toUpperCase() !== 'EFECTIVO' && (!createNumber.trim() || !createTitular.trim()))}>
+              <button className="btn-confirmar" onClick={handleCreateMethod} disabled={createLoading || !createName.trim() || !(createType || '').trim() || ((createType || '').trim().toUpperCase() !== 'EFECTIVO' && (!createNumber.trim() || !createTitular.trim()))}>
                 {createLoading ? 'Creando...' : 'Crear Método'}
               </button>
             </div>
@@ -886,8 +882,18 @@ export default function AdminWallet() {
                   inputMode="numeric"
                 />
               </div>
+              <div className="form-group">
+                <label>Tipo:</label>
+                <select value={editType} onChange={(e) => setEditType(e.target.value)}>
+                  <option value="">Selecciona un tipo</option>
+                  <option value="AHORRO">AHORRO</option>
+                  <option value="EFECTIVO">EFECTIVO</option>
+                  <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                </select>
+              </div>
+ 
               {/* Para EFECTIVO ocultamos número/titular */}
-              {editName.trim().toUpperCase() !== 'EFECTIVO' && (
+              {(editType || '').trim().toUpperCase() !== 'EFECTIVO' && (
                 <>
                   <div className="form-group">
                     <label>Número de cuenta:</label>
@@ -900,17 +906,34 @@ export default function AdminWallet() {
                 </>
               )}
               
-              <div className="form-group">
-                <label>Tipo:</label>
-                <input type="text" value={editType} onChange={(e) => setEditType(e.target.value)} placeholder="Ej: bancaria, efectivo, etc." />
-              </div>
+             <div className="form-group">
+               <label>Seleccionar imagen (opcional):</label>
+               <div className="preset-grid">
+                 {Object.keys(images).map((k) => (
+                   <button
+                     key={k}
+                     type="button"
+                     className={`preset-thumb ${editImage === k ? 'selected' : ''}`}
+                     onClick={() => setEditImage(editImage === k ? '' : k)}
+                     style={{ backgroundImage: `url(${images[k]})` }}
+                   />
+                 ))}
+               </div>
+               {editImage && (
+                 <div className="preview-row" style={{ marginTop: 8 }}>
+                   <div className="preview-img" style={{ backgroundImage: `url(${getImageForMethod(editImage)})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                   <button className="btn-remove-img" onClick={() => setEditImage('')}>Quitar</button>
+                 </div>
+               )}
+             </div>
+
             </div>
             <div className="modal-buttons">
               <button className="btn-cancelar" onClick={() => setShowEditModal(false)} disabled={editLoading}>Cancelar</button>
               <button className="btn-delete-medio" onClick={handleDeleteMethod} disabled={editLoading}>
                 {editLoading ? '...' : 'Eliminar'}
               </button>
-              <button className="btn-confirmar" onClick={handleUpdateMethod} disabled={editLoading || !editName.trim() || !editType.trim() || (editName.trim().toUpperCase() !== 'EFECTIVO' && (!editNumber.trim() || !editTitular.trim()))}>
+              <button className="btn-confirmar" onClick={handleUpdateMethod} disabled={editLoading || !editName.trim() || !(editType || '').trim() || ((editType || '').trim().toUpperCase() !== 'EFECTIVO' && (!editNumber.trim() || !editTitular.trim()))}>
                 {editLoading ? 'Guardando...' : 'Guardar Cambios'}
               </button>
             </div>

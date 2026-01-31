@@ -64,7 +64,8 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,0.45);
+  /* ligeramente más oscuro para mayor contraste sobre imágenes brillantes */
+  background: rgba(0,0,0,0.55);
   border-radius: 12px;
   pointer-events: none;
 }
@@ -73,6 +74,30 @@
 .balance-card .card-content {
   position: relative;
   z-index: 1;
+  /* pequeño fondo y padding para asegurar legibilidad y separación del borde */
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+/* Texto y balance más legible sobre imagen: blanco con sombra */
+.balance-card.background-image .card-method {
+  color: #fff;
+  text-shadow: 0 3px 12px rgba(0,0,0,0.8);
+  font-weight: 700;
+}
+
+.balance-card.background-image .card-balance {
+  color: #fff;
+  text-shadow: 0 4px 18px rgba(0,0,0,0.85);
+  font-weight: 800;
+  font-size: 30px;
+}
+
+/* meta info (tipo/número) también en blanco y con sombra */
+.balance-card.background-image .card-meta {
+  color: rgba(255,255,255,0.95);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.7);
 }
 
 /* Preview and file input styles (ya estaban, aseguramos consistencia) */

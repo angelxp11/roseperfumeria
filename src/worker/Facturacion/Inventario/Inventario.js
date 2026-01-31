@@ -346,7 +346,7 @@ export default function Inventario({ onAgregarAlCarrito }) {
                   {envases.map(env => (
                     <div key={env.documentId} className="envase-card" onClick={() => handleSeleccionarEnvase(env)}>
                       <div className="envase-card-name">{env.name}</div>
-                      <div className="envase-card-id">{env.id}</div>
+                      
                       <div className="envase-card-price">${new Intl.NumberFormat('es-CO').format(env.price)}</div>
                     </div>
                   ))}

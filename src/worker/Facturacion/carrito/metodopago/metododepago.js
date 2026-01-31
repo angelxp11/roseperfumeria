@@ -247,7 +247,11 @@ const descontarInsumosPorFormula = async (items = []) => {
           nombre: item.nombre || item.name || 'Producto sin nombre',
           cantidad: item.cantidad || 0,
           precio_unitario: item.precio || item.price || 0,
-          subtotal: (item.cantidad || 0) * (item.precio || item.price || 0)
+          subtotal: (item.cantidad || 0) * (item.precio || item.price || 0),
+          // NEW: preservar campos útiles para restaurar stock en caso de cancelación
+          documentId: item.documentId || null,
+          idFormula: item.idFormula || null,
+          idEsencia: item.idEsencia || null
         }))
         .filter(p => p.nombre && p.cantidad > 0);
 
