@@ -1,22 +1,26 @@
 {
   "files": {
-    "main.css": "/roseperfumeria/static/css/main.da453605.css",
-    "main.js": "/roseperfumeria/static/js/main.c116dcd8.js",
+    "main.css": "/roseperfumeria/static/css/main.065a175c.css",
+    "main.js": "/roseperfumeria/static/js/main.bf3c894a.js",
     "static/js/239.b70782a0.chunk.js": "/roseperfumeria/static/js/239.b70782a0.chunk.js",
     "static/js/977.2873d5bf.chunk.js": "/roseperfumeria/static/js/977.2873d5bf.chunk.js",
     "static/js/455.46e40677.chunk.js": "/roseperfumeria/static/js/455.46e40677.chunk.js",
     "static/js/453.8dac180b.chunk.js": "/roseperfumeria/static/js/453.8dac180b.chunk.js",
+    "static/media/AGROSUR.png": "/roseperfumeria/static/media/AGROSUR.8dbac44ab4defb156e17.png",
     "static/media/logo512.png": "/roseperfumeria/static/media/logo512.4f88a2e5642ecff499a5.png",
+    "static/media/EFECTIVO.png": "/roseperfumeria/static/media/EFECTIVO.4e7291ea88b91a513f09.png",
+    "static/media/BANCOLOMBIA.png": "/roseperfumeria/static/media/BANCOLOMBIA.babd1744cfa1706f87fd.png",
+    "static/media/NEQUI.png": "/roseperfumeria/static/media/NEQUI.3e22e938faa076398e11.png",
     "index.html": "/roseperfumeria/index.html",
-    "main.da453605.css.map": "/roseperfumeria/static/css/main.da453605.css.map",
-    "main.c116dcd8.js.map": "/roseperfumeria/static/js/main.c116dcd8.js.map",
+    "main.065a175c.css.map": "/roseperfumeria/static/css/main.065a175c.css.map",
+    "main.bf3c894a.js.map": "/roseperfumeria/static/js/main.bf3c894a.js.map",
     "239.b70782a0.chunk.js.map": "/roseperfumeria/static/js/239.b70782a0.chunk.js.map",
     "977.2873d5bf.chunk.js.map": "/roseperfumeria/static/js/977.2873d5bf.chunk.js.map",
     "455.46e40677.chunk.js.map": "/roseperfumeria/static/js/455.46e40677.chunk.js.map",
     "453.8dac180b.chunk.js.map": "/roseperfumeria/static/js/453.8dac180b.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.da453605.css",
-    "static/js/main.c116dcd8.js"
+    "static/css/main.065a175c.css",
+    "static/js/main.bf3c894a.js"
   ]
 }
