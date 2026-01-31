@@ -51,6 +51,72 @@
   box-shadow: 0 0 20px rgba(176, 116, 69, 0.3);
 }
 
+/* Background image support for payment cards */
+.balance-card.background-image {
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  color: var(--color-text);
+}
+
+/* overlay para mejorar legibilidad del texto sobre la imagen */
+.balance-card.background-image::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+/* asegurar que el contenido quede arriba del overlay */
+.balance-card .card-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* Preview and file input styles (ya estaban, aseguramos consistencia) */
+.preview-row { display:flex; gap:10px; align-items:center; margin-bottom:10px; }
+.preview-img { width: 100px; height: 70px; object-fit: cover; border-radius: 8px; border: 1px solid var(--color-border); }
+.file-input { display: none; }
+.btn-remove-img { background: #ef4444; color: white; padding: 6px 8px; border-radius: 6px; border: none; cursor: pointer; }
+
+/* PRESET IMAGES: rejilla y miniaturas */
+.preset-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.preset-thumb {
+  width: 64px;
+  height: 40px;
+  border-radius: 8px;
+  background-size: cover;
+  background-position: center;
+  border: 2px solid transparent;
+  cursor: pointer;
+  display: inline-block;
+  box-shadow: none;
+  padding: 0;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+  background-color: #111;
+  color: var(--color-text);
+  font-size: 12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.preset-thumb:hover { transform: translateY(-4px); }
+
+.preset-thumb.selected {
+  border-color: var(--color-primary);
+  box-shadow: 0 6px 20px rgba(176,116,69,0.18);
+}
+
 .card-method {
   color: var(--color-text-soft);
   font-size: 12px;

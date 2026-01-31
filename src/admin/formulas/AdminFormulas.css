@@ -73,12 +73,49 @@
   font-size: 16px;
 }
 
+
 .formulas-tabla {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: auto;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  max-height: 550px;
+  position: relative;
+}
+
+.formulas-tabla::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.formulas-tabla::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.formulas-tabla::-webkit-scrollbar-thumb {
+  background: rgba(176, 116, 69, 0.4);
+  border-radius: 10px;
+}
+
+.formulas-tabla::-webkit-scrollbar-thumb:hover {
+  background: rgba(176, 116, 69, 0.6);
+}
+
+.formulas-tabla table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px;
+}
+
+.formulas-tabla thead {
+  background-color: rgba(176, 116, 69, 0.2);
+  border-bottom: 2px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .formulas-tabla table {

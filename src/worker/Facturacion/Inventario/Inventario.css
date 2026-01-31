@@ -23,40 +23,77 @@
   flex-shrink: 0;
 }
 
-.tabs-container {
-  display: flex;
-  gap: 8px;
+.categorias-select-container {
   margin-bottom: 15px;
   flex-shrink: 0;
-  flex-wrap: wrap;
 }
 
-.tab-button {
-  padding: 8px 16px;
+.categorias-select {
+  width: 100%;
+  padding: 10px 12px;
   background: var(--color-bg);
   border: 2px solid var(--color-primary);
   border-radius: 6px;
   cursor: pointer;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-primary);
   transition: all 0.3s;
 }
 
-.tab-button:hover {
-  background: var(--color-primary);
-  color: white;
+.categorias-select:hover {
+  background: rgba(176, 116, 69, 0.15);
+  border-color: var(--color-primary);
 }
 
-.tab-button.active {
+.categorias-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(176, 116, 69, 0.2);
+}
+
+.categorias-select option {
+  background: #1a1a1a;
+  color: #ffffff;
+  padding: 10px;
+}
+
+.categorias-select option:hover {
+  background: #333333;
+  color: #ffffff;
+}
+
+.categorias-select option:checked {
   background: var(--color-primary);
-  color: white;
-  border-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.tabs-container {
+  display: none;
 }
 
 .categorias-list {
   flex: 1;
   overflow-y: auto;
+  border-radius: 8px;
+  padding-right: 4px;
+}
+
+.categorias-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.categorias-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.categorias-list::-webkit-scrollbar-thumb {
+  background: rgba(176, 116, 69, 0.4);
+  border-radius: 10px;
+}
+
+.categorias-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(176, 116, 69, 0.6);
 }
 
 .productos-grid {

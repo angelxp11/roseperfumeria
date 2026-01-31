@@ -262,16 +262,19 @@ export default function Inventario({ onAgregarAlCarrito }) {
     <div className="right-panel">
       <div className="categorias-container">
         <h3><FaBoxes /> Inventario</h3>
-        <div className="tabs-container">
-          {categorias.map((cat) => (
-            <button
-              key={cat}
-              className={`tab-button ${categoriaActiva === cat ? 'active' : ''}`}
-              onClick={() => handleCambiarCategoria(cat)}
-            >
-              {cat}
-            </button>
-          ))}
+        
+        <div className="categorias-select-container">
+          <select
+            value={categoriaActiva}
+            onChange={(e) => handleCambiarCategoria(e.target.value)}
+            className="categorias-select"
+          >
+            {categorias.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="search-container-worker">

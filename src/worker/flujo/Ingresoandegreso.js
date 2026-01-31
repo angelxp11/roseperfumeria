@@ -62,8 +62,11 @@ export default function Flujo() {
     const snap = await getDocs(collection(db, 'PAYMENT'));
     const methods = [];
     const balancesMap = {};
+    // Excluir métodos tipo 'AHORRO'
     snap.forEach(doc => {
       const data = doc.data();
+      const t = (data.type || '').toString().trim().toUpperCase();
+      if (t === 'AHORRO') return;
       methods.push({ id: doc.id, name: data.name, balance: Number(data.balance || 0) });
       balancesMap[data.name] = Number(data.balance || 0);
     });
@@ -76,9 +79,13 @@ export default function Flujo() {
     const cajaSnap = await getDoc(cajaRef);
     const cajaData = cajaSnap.exists() ? cajaSnap.data() : {};
     const apertura = cajaData.APERTURA || {};
+    // Solo exponer en cajaBalances las keys correspondientes a métodos visibles
+    const allowed = new Set(methods.map(m => m.name));
+    allowed.add('EFECTIVO'); // legacy names allowed
+    allowed.add('TRANSFERENCIA');
     const cajaMap = {};
     Object.keys(apertura).forEach(k => {
-      cajaMap[k] = Number(apertura[k] || 0);
+      if (allowed.has(k)) cajaMap[k] = Number(apertura[k] || 0);
     });
     setCajaBalances(cajaMap);
 
@@ -102,17 +109,11 @@ export default function Flujo() {
     }
     setLoading(true);
     try {
-      // Update PAYMENT
-      const pm = paymentMethods.find(m => m.name === metodo);
-      await setDoc(doc(db, 'PAYMENT', pm.id), {
-        balance: balances[metodo] + Number(valor)
-      }, { merge: true });
-
-      // Update CAJAS
+      // Update CAJAS (el flujo administra la caja del día, no PAYMENT)
       const fechaHoyId = getFechaHoyId();
       const cajaRef = doc(db, 'CAJAS', fechaHoyId);
       const cajaSnap = await getDoc(cajaRef);
-      let cajaData = cajaSnap.exists() ? cajaSnap.data() : {};
+      const cajaData = cajaSnap.exists() ? cajaSnap.data() : {};
       const prevApertura = cajaData.APERTURA || {};
       const prev = Number(prevApertura[metodo] || 0);
       await setDoc(cajaRef, {
@@ -128,7 +129,7 @@ export default function Flujo() {
       const movId = String(Date.now());
       const movObj = {
         momento: new Date().toISOString(),
-        descripcion: `Ingreso de dinero: $${formatNumber(valor)} a ${metodo}. ${descripcion ? `Motivo: ${descripcion}.` : ''} Realizado por ${empleadoNombre}.`
+        descripcion: `Ingreso de dinero: $${formatNumber(valor)} a ${metodo}. ${descripcion ? `Motivo: ${descripcion}.` : ''} Realizado por ${empleadoNombre}. Saldo anterior: $${formatNumber(prev)}, saldo posterior: $${formatNumber(prev + Number(valor))}.`
       };
       await setDoc(movRef, { [movId]: movObj }, { merge: true });
 
@@ -136,6 +137,7 @@ export default function Flujo() {
       setModal(null);
       setValor('');
       setDescripcion('');
+      // refrescar saldos/caja
       fetchPaymentMethods();
     } catch (e) {
       toast.error('Error al ingresar dinero');
@@ -153,7 +155,8 @@ export default function Flujo() {
       toast.error('Ingresa un motivo para el movimiento');
       return;
     }
-    if (Number(valor) > balances[metodo]) {
+    // validar contra saldo en CAJA del día (no PAYMENT)
+    if (Number(valor) > Number(cajaBalances[metodo] || 0)) {
       toast.error('Saldo insuficiente en Caja');
       return;
     }
@@ -172,13 +175,7 @@ export default function Flujo() {
 
     setLoading(true);
     try {
-      // Update PAYMENT
-      const pm = paymentMethods.find(m => m.name === metodo);
-      await setDoc(doc(db, 'PAYMENT', pm.id), {
-        balance: balances[metodo] - Number(valor)
-      }, { merge: true });
-
-      // Update CAJAS
+      // Update CAJAS (restar de la caja del día)
       const prevApertura = cajaData.APERTURA || {};
       const prev = Number(prevApertura[metodo] || 0);
       await setDoc(cajaRef, {
@@ -194,7 +191,7 @@ export default function Flujo() {
       const movId = String(Date.now());
       const movObj = {
         momento: new Date().toISOString(),
-        descripcion: `Retiro de dinero: $${formatNumber(valor)} de ${metodo}. ${descripcion ? `Motivo: ${descripcion}.` : ''} Realizado por ${empleadoNombre}.`
+        descripcion: `Retiro de dinero: $${formatNumber(valor)} de ${metodo}. ${descripcion ? `Motivo: ${descripcion}.` : ''} Realizado por ${empleadoNombre}. Saldo anterior: $${formatNumber(prev)}, saldo posterior: $${formatNumber(prev - Number(valor))}.`
       };
       await setDoc(movRef, { [movId]: movObj }, { merge: true });
 
@@ -223,7 +220,8 @@ export default function Flujo() {
       toast.error('Selecciona cuentas diferentes');
       return;
     }
-    if (Number(transferValor) > balances[fromMethod]) {
+    // Validar contra saldo en CAJA del día
+    if (Number(transferValor) > Number(cajaBalances[fromMethod] || 0)) {
       toast.error('Saldo insuficiente en Caja');
       return;
     }
@@ -242,17 +240,7 @@ export default function Flujo() {
 
     setLoading(true);
     try {
-      // Update PAYMENT
-      const fromPM = paymentMethods.find(m => m.name === fromMethod);
-      const toPM = paymentMethods.find(m => m.name === toMethod);
-      await setDoc(doc(db, 'PAYMENT', fromPM.id), {
-        balance: balances[fromMethod] - Number(transferValor)
-      }, { merge: true });
-      await setDoc(doc(db, 'PAYMENT', toPM.id), {
-        balance: balances[toMethod] + Number(transferValor)
-      }, { merge: true });
-
-      // Update CAJAS
+      // Update CAJAS (transferencia entre métodos de la caja del día)
       const prevApertura = cajaData.APERTURA || {};
       const prevFrom = Number(prevApertura[fromMethod] || 0);
       const prevTo = Number(prevApertura[toMethod] || 0);

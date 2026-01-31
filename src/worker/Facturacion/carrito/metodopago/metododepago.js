@@ -41,19 +41,31 @@ export default function MetodoDePago({ total, onClose, onCompletarCompra, items 
   useEffect(() => {
     const cargarMetodos = async () => {
       const snap = await getDocs(collection(db, 'PAYMENT'));
-      const data = snap.docs.map(d => ({
-        docId: d.id,
-        ...d.data()
-      }));
+      // Excluir métodos cuyo type === 'AHORRO' (case-insensitive)
+      const data = snap.docs
+        .map(d => ({ docId: d.id, ...d.data() }))
+        .filter(m => ((m.type || '').toString().trim().toUpperCase() !== 'AHORRO'));
       setMetodosPago(data);
     };
 
     cargarMetodos();
   }, []);
 
-  const efectivo = metodosPago.find(m => !m.type);
-  const transferencias = metodosPago.filter(m => m.type === 'TRANSFERENCIA');
+  // detectar efectivo incluso si tiene type 'EFECTIVO' o no tiene type
+  const efectivo = metodosPago.find(m => !(m.type) || (m.type || '').toString().trim().toUpperCase() === 'EFECTIVO');
+  const transferencias = metodosPago.filter(m => (m.type || '').toString().trim().toUpperCase() === 'TRANSFERENCIA');
   const todosMetodos = metodosPago;
+ 
+  // Incrementar balance en PAYMENT (docId) usando increment para evitar race conditions
+  const incrementarPayment = async (docId, monto) => {
+    try {
+      if (!docId || Number(monto) === 0) return;
+      const ref = doc(db, 'PAYMENT', docId);
+      await updateDoc(ref, { balance: increment(Number(monto)) });
+    } catch (e) {
+      console.error('Error incrementando PAYMENT:', e);
+    }
+  };
 
   /* =======================
      HELPERS
@@ -267,7 +279,12 @@ const descontarInsumosPorFormula = async (items = []) => {
           setCargando(false);
           return;
         }
+        // incrementar CAJA y PAYMENT (si existe método EFECTIVO)
         if (efectivo) {
+          await incrementarCaja('EFECTIVO', total);
+          await incrementarPayment(efectivo.docId, total);
+        } else {
+          // fallback: sólo caja
           await incrementarCaja('EFECTIVO', total);
         }
         await crearFactura('Efectivo', total, { metodo: 'Efectivo' });
@@ -278,6 +295,8 @@ const descontarInsumosPorFormula = async (items = []) => {
           const clave = obtenerClaveCaja(cuentaTransferencia);
           const nombreMetodo = obtenerNombreMetodoPago(cuentaTransferencia);
           await incrementarCaja(clave, total);
+          // actualizar PAYMENT por docId
+          await incrementarPayment(cuentaTransferencia, total);
           await crearFactura(nombreMetodo, total, { metodo: nombreMetodo });
         }
       }
@@ -290,19 +309,23 @@ const descontarInsumosPorFormula = async (items = []) => {
 
         if (metodos.primero === 'efectivo' && efectivo) {
           await incrementarCaja('EFECTIVO', monto1);
+          await incrementarPayment(efectivo.docId, monto1);
           detalleMetodos.push({ metodo: 'Efectivo', monto: monto1 });
         }
         if (metodos.primero === 'transferencia' && metodos.cuentaPrimero) {
           await incrementarCaja(obtenerClaveCaja(metodos.cuentaPrimero), monto1);
+          await incrementarPayment(metodos.cuentaPrimero, monto1);
           const nombreMetodo = obtenerNombreMetodoPago(metodos.cuentaPrimero);
           detalleMetodos.push({ metodo: nombreMetodo, monto: monto1 });
         }
         if (metodos.segundo === 'efectivo' && efectivo) {
           await incrementarCaja('EFECTIVO', monto2);
+          await incrementarPayment(efectivo.docId, monto2);
           detalleMetodos.push({ metodo: 'Efectivo', monto: monto2 });
         }
         if (metodos.segundo === 'transferencia' && metodos.cuentaSegundo) {
           await incrementarCaja(obtenerClaveCaja(metodos.cuentaSegundo), monto2);
+          await incrementarPayment(metodos.cuentaSegundo, monto2);
           const nombreMetodo = obtenerNombreMetodoPago(metodos.cuentaSegundo);
           detalleMetodos.push({ metodo: nombreMetodo, monto: monto2 });
         }
@@ -311,6 +334,11 @@ const descontarInsumosPorFormula = async (items = []) => {
       }
 
       if (metodoSeleccionado === 'tarjeta') {
+        // si existe un PAYMENT para tarjeta, incrementar su balance
+        const tarjetaMethod = metodosPago.find(m => (m.type || '').toString().trim().toUpperCase() === 'TARJETA' || (m.name || '').toLowerCase().includes('tarjeta'));
+        if (tarjetaMethod) {
+          await incrementarPayment(tarjetaMethod.docId, total);
+        }
         await crearFactura('Tarjeta', total, { metodo: 'Tarjeta' });
       }
       // después de crear factura y actualizar caja

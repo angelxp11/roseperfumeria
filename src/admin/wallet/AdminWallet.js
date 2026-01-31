@@ -7,6 +7,16 @@ import './AdminWallet.css';
 import { FaExchangeAlt, FaWallet, FaArrowUp, FaArrowDown, FaFileDownload, FaPlus, FaEdit } from 'react-icons/fa'; // agregado FaEdit
 import ReportePDFBankStatement from '../../worker/Facturacion/ReportePDF/ReportePDFBankStatement.js';
 
+// NUEVO: importar imágenes desde carpeta images
+import images from '../../resources/Images/indesx.js';
+
+const paymentImages = {
+  AGROSUR: images.AGROSUR,
+  BANCOLOMBIA: images.BANCOLOMBIA,
+  EFECTIVO: images.EFECTIVO,
+  NEQUI: images.NEQUI,
+};
+
 export default function AdminWallet() {
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [balances, setBalances] = useState({});
@@ -500,6 +510,24 @@ export default function AdminWallet() {
      }
    };
 
+  // Helper para obtener imagen de método; intenta varias variantes y devuelve '' si no existe
+  const getImageForMethod = (name) => {
+    if (!name) return '';
+    const candidates = [
+      `${name}.png`,
+      `${name}.jpg`,
+      `${name}.jpeg`,
+      `${name}.svg`,
+      `${name.toLowerCase()}.png`,
+      `${name.replace(/\s+/g, '').toLowerCase()}.png`,
+      `${name.replace(/\s+/g, '_').toLowerCase()}.png`,
+    ];
+    for (const c of candidates) {
+      if (images[c]) return images[c];
+    }
+    return images['default.png'] || '';
+  };
+
   if (loading) {
     return <div className="wallet-container"><p>Cargando wallet...</p></div>;
   }
@@ -514,6 +542,14 @@ export default function AdminWallet() {
       <div className="balance-cards">
         {paymentMethods.map((method) => (
           <div key={method.id} className="balance-card">
+            {/* Mostrar icono si existe */}
+            {getImageForMethod(method.name) && (
+              <img
+                src={getImageForMethod(method.name)}
+                alt={`${method.name} icon`}
+                style={{ width: 40, height: 40, objectFit: 'contain', marginRight: 8 }}
+              />
+            )}
             <div className="card-method">{method.name}</div>
             <div className="card-balance">${formatNumber(balances[method.name] || 0)}</div>
 
