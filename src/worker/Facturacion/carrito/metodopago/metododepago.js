@@ -90,6 +90,25 @@ const descontarInsumosPorFormula = async (items = []) => {
       continue;
     }
 
+    // NUEVO: Si es un ADICIONAL (usa stock de ESENCIA), descontar desde ESENCIA
+    if (item.isAdicional || (item.category || '').toString().trim().toUpperCase() === 'ADICIONALES') {
+      const gramosPorUnidad = Number(item.esenciaGramos || 0);
+      const totalGramos = gramosPorUnidad * cantidad;
+      console.log(`🌿 ADICIONAL usando ESENCIA ${item.idEsencia} - total gramos a descontar: ${totalGramos}`);
+      if (item.idEsencia && totalGramos > 0) {
+        try {
+          const ref = doc(db, 'ESENCIA', item.idEsencia);
+          await updateDoc(ref, { stock: increment(-totalGramos) });
+          console.log(`✅ Descontados ${totalGramos}g de ESENCIA ${item.idEsencia}`);
+        } catch (error) {
+          console.error('🔥 Error descontando ESENCIA para adicional', error);
+        }
+      } else {
+        console.warn('⚠️ Item adicional sin idEsencia o gramos inválidos');
+      }
+      continue;
+    }
+
     /* =================================================
        CASO 1: PRODUCTO CON FÓRMULA
     ================================================= */
@@ -172,6 +191,13 @@ const descontarInsumosPorFormula = async (items = []) => {
     ================================================= */
     console.log('📦 CASO 2: Producto normal sin fórmula');
 
+    // Si el item es un refill (marca isRefill=true o nombre "REFILL ..."), no descontamos el envase
+    const esRefill = !!item.isRefill || (item.name && item.name.toString().toUpperCase().startsWith('REFILL'));
+    if (esRefill) {
+      console.log(`⚠️ Saltando descuento de stock para envase (refill): ${item.name || item.id || item.documentId}`);
+      continue;
+    }
+
     if (item.documentId) {
       try {
         const productoRef = doc(db, 'PRODUCTOS', item.documentId);
@@ -192,10 +218,6 @@ const descontarInsumosPorFormula = async (items = []) => {
 
   console.log('🟢 Fin descuento de insumos');
 };
-
-
-
-
 
   const formatearPrecio = (valor) =>
     new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(valor || 0);
@@ -251,7 +273,8 @@ const descontarInsumosPorFormula = async (items = []) => {
           // NEW: preservar campos útiles para restaurar stock en caso de cancelación
           documentId: item.documentId || null,
           idFormula: item.idFormula || null,
-          idEsencia: item.idEsencia || null
+          idEsencia: item.idEsencia || null,
+          esenciaGramos: item.esenciaGramos || null // agregado para ADICIONALES
         }))
         .filter(p => p.nombre && p.cantidad > 0);
 

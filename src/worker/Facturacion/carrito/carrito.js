@@ -41,11 +41,33 @@ const Carrito = forwardRef((props, ref) => {
 
   useImperativeHandle(ref, () => ({
     agregarAlCarrito: (producto) => {
-      const itemExistente = carrito.find(item => item.documentId === producto.documentId);
+      // Si el producto viene con gramos de esencia, sumar por idEsencia
+      if (producto.esenciaGramos) {
+        const exist = carrito.find(item => item.documentId === producto.documentId && item.idEsencia === producto.idEsencia);
+        if (exist) {
+          setCarrito(carrito.map(item =>
+            (item.documentId === producto.documentId && item.idEsencia === producto.idEsencia)
+              ? { ...item, esenciaGramos: Number(item.esenciaGramos || 0) + Number(producto.esenciaGramos || 0) }
+              : item
+          ));
+        } else {
+          setCarrito([...carrito, { 
+            ...producto,
+            esenciaGramos: Number(producto.esenciaGramos || 0),
+            cantidad: 1,
+            idFormula: producto.idFormula || null,
+            idEsencia: producto.idEsencia || null
+          }]);
+        }
+        return;
+      }
+
+      // Comportamiento normal para productos sin esencia (por unidades)
+      const itemExistente = carrito.find(item => item.documentId === producto.documentId && !item.esenciaGramos);
       
       if (itemExistente) {
         setCarrito(carrito.map(item =>
-          item.documentId === producto.documentId
+          item.documentId === producto.documentId && !item.esenciaGramos
             ? { ...item, cantidad: item.cantidad + 1 }
             : item
         ));
@@ -60,24 +82,44 @@ const Carrito = forwardRef((props, ref) => {
     }
   }));
 
-  const eliminarDelCarrito = (documentId) => {
-    setCarrito(carrito.filter(item => item.documentId !== documentId));
+  const eliminarDelCarrito = (documentId, idEsencia = null) => {
+    if (idEsencia) {
+      setCarrito(carrito.filter(item => !(item.documentId === documentId && item.idEsencia === idEsencia)));
+    } else {
+      // Eliminar el producto por unidades (no tocar entradas de esencias específicas)
+      setCarrito(carrito.filter(item => !(item.documentId === documentId && !item.esenciaGramos)));
+    }
   };
 
-  const modificarCantidad = (documentId, nuevaCantidad) => {
-    if (nuevaCantidad <= 0) {
-      eliminarDelCarrito(documentId);
+  const modificarCantidad = (documentId, nuevaCantidad, idEsencia = null) => {
+    if (idEsencia) {
+      if (nuevaCantidad <= 0) {
+        eliminarDelCarrito(documentId, idEsencia);
+      } else {
+        setCarrito(carrito.map(item =>
+          (item.documentId === documentId && item.idEsencia === idEsencia)
+            ? { ...item, esenciaGramos: Number(nuevaCantidad) }
+            : item
+        ));
+      }
     } else {
-      setCarrito(carrito.map(item =>
-        item.documentId === documentId
-          ? { ...item, cantidad: nuevaCantidad }
-          : item
-      ));
+      if (nuevaCantidad <= 0) {
+        eliminarDelCarrito(documentId);
+      } else {
+        setCarrito(carrito.map(item =>
+          item.documentId === documentId && !item.esenciaGramos
+            ? { ...item, cantidad: nuevaCantidad }
+            : item
+        ));
+      }
     }
   };
 
   const calcularTotal = (item) => {
-    return item.price * item.cantidad;
+    if (item.esenciaGramos) {
+      return (Number(item.price) || 0) * Number(item.esenciaGramos || 0);
+    }
+    return (Number(item.price) || 0) * Number(item.cantidad || 0);
   };
 
   const calcularTotalCarrito = () => {
@@ -122,20 +164,32 @@ const Carrito = forwardRef((props, ref) => {
               <div key={item.documentId} className="carrito-item">
                 <span className="col-id">{item.id}</span>
                 <span className="col-nombre">{item.name}</span>
-                <div className="col-cantidad item-cantidad">
-                  <button onClick={() => modificarCantidad(item.documentId, item.cantidad - 1)}>-</button>
-                  <input 
-                    type="number" 
-                    value={item.cantidad}
-                    onChange={(e) => modificarCantidad(item.documentId, parseInt(e.target.value) || 1)}
-                  />
-                  <button onClick={() => modificarCantidad(item.documentId, item.cantidad + 1)}>+</button>
-                </div>
-                <span className="col-valor">${formatearPrecio(item.price)}</span>
+                {item.esenciaGramos ? (
+                  <div className="col-cantidad item-cantidad">
+                    <button onClick={() => modificarCantidad(item.documentId, Math.max(Number(item.esenciaGramos) - 1, 0), item.idEsencia)}>-</button>
+                    <input
+                      type="number"
+                      value={item.esenciaGramos}
+                      onChange={(e) => modificarCantidad(item.documentId, parseInt(e.target.value) || 0, item.idEsencia)}
+                    />
+                    <button onClick={() => modificarCantidad(item.documentId, Number(item.esenciaGramos) + 1, item.idEsencia)}>+</button>
+                  </div>
+                ) : (
+                  <div className="col-cantidad item-cantidad">
+                    <button onClick={() => modificarCantidad(item.documentId, item.cantidad - 1)}>-</button>
+                    <input 
+                      type="number" 
+                      value={item.cantidad}
+                      onChange={(e) => modificarCantidad(item.documentId, parseInt(e.target.value) || 1)}
+                    />
+                    <button onClick={() => modificarCantidad(item.documentId, item.cantidad + 1)}>+</button>
+                  </div>
+                )}
+                <span className="col-valor">{item.esenciaGramos ? `${formatearPrecio(item.price)}/g` : `$${formatearPrecio(item.price)}`}</span>
                 <span className="col-total">${formatearPrecio(calcularTotal(item))}</span>
                 <button 
                   className="btn-eliminar"
-                  onClick={() => eliminarDelCarrito(item.documentId)}
+                  onClick={() => eliminarDelCarrito(item.documentId, item.idEsencia)}
                 >
                   ✕
                 </button>

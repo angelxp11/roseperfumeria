@@ -293,12 +293,13 @@ export default function AdminEsencias() {
             continue;
           }
 
-          const tipo = (row.Tipo || 'ESENCIA').toUpperCase();
-          const coleccion = tipo === 'INSUMOS' ? 'INSUMOS' : 'ESENCIA';
+          // Usar el género para determinar si es INSUMO o ESENCIA
+          const esInsumo = (row.Género || '').toUpperCase() === 'INSUMO';
+          const coleccion = esInsumo ? 'INSUMOS' : 'ESENCIA';
           
-          // Para INSUMOS, usar el ID como documentId
+          // Para INSUMOS, usar el ID como documentId; para ESENCIA, generar ID de 12 dígitos
           let idEsencia;
-          if (tipo === 'INSUMOS') {
+          if (esInsumo) {
             idEsencia = row.ID ? row.ID.toString().toUpperCase() : 'INSUMO_' + Date.now();
           } else {
             idEsencia = row.ID ? row.ID.toString().padStart(12, '0') : generarIdIncremental();

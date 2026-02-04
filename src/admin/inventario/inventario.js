@@ -22,7 +22,8 @@ export default function AdminInventario() {
     price: '',
     idFormulas: [],
     idEsencia: '',
-    formulasPrices: {} // NUEVO: guardar precios por fórmula
+    formulasPrices: {}, // NUEVO: guardar precios por fórmula
+    esenciaGramos: '' // NUEVO: gramos por unidad para ADICIONALES
   });
   const [categorias, setCategorias] = useState([]);
   const [formulas, setFormulas] = useState([]);
@@ -38,6 +39,13 @@ export default function AdminInventario() {
   useEffect(() => {
     filtrarProductos();
   }, [busqueda, productos]);
+
+  // Cargar esencias automáticamente al abrir el modal si aún no están
+  useEffect(() => {
+    if (showModal && esencias.length === 0) {
+      cargarEsencias();
+    }
+  }, [showModal]);
 
   const cargarProductos = async () => {
     try {
@@ -204,11 +212,15 @@ export default function AdminInventario() {
     if (name === 'name') {
       finalValue = value.toUpperCase();
     }
-    
+
     setFormData(prev => ({
       ...prev,
       [name]: finalValue
     }));
+
+    if (name === 'category' && value.toString().trim().toUpperCase() === 'ADICIONALES' && esencias.length === 0) {
+      cargarEsencias();
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -222,24 +234,36 @@ export default function AdminInventario() {
       return;
     }
 
-    // Si tiene fórmulas, requiere esencia y precios por fórmula
+    const categoriaUpper = (formData.category || '').toString().trim().toUpperCase();
+
+    // Si tiene fórmulas, requiere esencia y precio (ahora precio es un único campo 'price')
     if (tieneFormulas) {
       if (!formData.idEsencia) {
         toast.error('Por favor selecciona una esencia');
         return;
       }
-      // Validar que todas las fórmulas tengan precio
-      for (const formulaId of formData.idFormulas) {
-        if (!formData.formulasPrices[formulaId]) {
-          toast.error(`Por favor ingresa el precio para la fórmula ${formulaId}`);
-          return;
-        }
+      if (formData.price === '' || formData.price === undefined) {
+        toast.error('Por favor ingresa el precio para el producto con fórmula');
+        return;
+      }
+      if (isNaN(parseFloat(formData.price))) {
+        toast.error('Por favor ingresa un precio válido');
+        return;
       }
     } else {
-      // Si no tiene fórmulas, requiere stock y precio general
-      if (!formData.stock || !formData.price) {
-        toast.error('Por favor completa el stock y precio');
-        return;
+      // Si no tiene fórmulas:
+      if (categoriaUpper === 'ADICIONALES') {
+        // Para ADICIONALES no se requiere stock, pero sí idEsencia y gramos por unidad
+        if (!formData.idEsencia || !formData.esenciaGramos || formData.price === '' || formData.price === undefined) {
+          toast.error('Para la categoría ADICIONALES selecciona la esencia, los gramos por unidad y el precio');
+          return;
+        }
+      } else {
+        // Producto sin fórmula normal: requiere stock y precio general
+        if (!formData.stock || !formData.price) {
+          toast.error('Por favor completa el stock y precio');
+          return;
+        }
       }
     }
 
@@ -259,16 +283,16 @@ export default function AdminInventario() {
 
         if (tieneFormulas) {
           // Al editar un producto con fórmula guardamos idFormula (singular) y price,
-          // eliminamos campos pluralizados para mantener consistencia y ponemos stock = 0
+          // eliminamos campos pluralizados y eliminamos stock
           if (formData.idFormulas.length !== 1) {
             toast.error('Para editar un producto con fórmula, selecciona exactamente una fórmula.');
             setLoading(false);
             return;
           }
           const formulaId = formData.idFormulas[0];
-          const precio = parseFloat(formData.formulasPrices[formulaId]);
+          const precio = parseFloat(formData.price);
           if (isNaN(precio)) {
-            toast.error('Por favor ingresa un precio válido para la fórmula seleccionada');
+            toast.error('Por favor ingresa un precio válido para el producto con fórmula');
             setLoading(false);
             return;
           }
@@ -276,7 +300,8 @@ export default function AdminInventario() {
           dataToUpdate.idFormula = formulaId;
           dataToUpdate.price = precio;
           dataToUpdate.idEsencia = formData.idEsencia || deleteField();
-          dataToUpdate.stock = 0;
+          // eliminar stock para productos con fórmula
+          dataToUpdate.stock = deleteField();
 
           // Eliminar posibles campos plurales que no usamos en cada documento individual
           dataToUpdate.idFormulas = deleteField();
@@ -287,8 +312,20 @@ export default function AdminInventario() {
           dataToUpdate.idEsencia = deleteField();
           dataToUpdate.formulasPrices = deleteField();
           dataToUpdate.idFormula = deleteField(); // eliminar idFormula si existía antes
-          dataToUpdate.stock = parseInt(formData.stock);
-          dataToUpdate.price = parseFloat(formData.price);
+
+          if (categoriaUpper === 'ADICIONALES') {
+            // No guardar stock, pero guardar idEsencia y gramos por unidad
+            dataToUpdate.stock = deleteField();
+            dataToUpdate.idEsencia = formData.idEsencia;
+            dataToUpdate.esenciaGramos = Number(formData.esenciaGramos);
+            dataToUpdate.price = parseFloat(formData.price);
+          } else {
+            dataToUpdate.stock = parseInt(formData.stock);
+            dataToUpdate.price = parseFloat(formData.price);
+            // eliminar campos de adicionales si existían
+            dataToUpdate.idEsencia = deleteField();
+            dataToUpdate.esenciaGramos = deleteField();
+          }
         }
 
         await updateDoc(docRef, dataToUpdate);
@@ -298,6 +335,8 @@ export default function AdminInventario() {
         if (tieneFormulas) {
   let ultimoId = obtenerUltimoIdNumerico();
   let productosCreados = 0;
+
+  const precioComun = parseFloat(formData.price);
 
   for (const formulaId of formData.idFormulas) {
     ultimoId++;
@@ -315,10 +354,10 @@ export default function AdminInventario() {
       id: idProducto,
       name: nombreProducto,
       category: formData.category,
-      price: parseFloat(formData.formulasPrices[formulaId]),
+      price: precioComun,
       idFormula: formulaId,
-      idEsencia: formData.idEsencia,
-      stock: 0
+      idEsencia: formData.idEsencia
+      // no incluir stock para productos con fórmula
     });
 
     productosCreados++;
@@ -327,22 +366,38 @@ export default function AdminInventario() {
   toast.success(`${productosCreados} producto(s) agregado(s) correctamente`);
 }
 else {
-          // Crear un solo producto sin fórmula (NO crear campos idFormulas ni idEsencia)
+          // Crear un solo producto sin fórmula
           const idProducto = formData.id || generarIdIncremental();
           const docRef = doc(db, 'PRODUCTOS', idProducto);
-          await setDoc(docRef, {
-            id: idProducto,
-            name: formData.name,
-            category: formData.category,
-            stock: parseInt(formData.stock),
-            price: parseFloat(formData.price)
-          });
-          toast.success('Producto agregado correctamente');
+
+          const categoriaUpper = (formData.category || '').toString().trim().toUpperCase();
+
+          if (categoriaUpper === 'ADICIONALES') {
+            // No guardar stock, guardar idEsencia y gramos por unidad
+            await setDoc(docRef, {
+              id: idProducto,
+              name: formData.name,
+              category: formData.category,
+              price: parseFloat(formData.price),
+              idEsencia: formData.idEsencia,
+              esenciaGramos: Number(formData.esenciaGramos)
+            });
+            toast.success('Adicional agregado correctamente');
+          } else {
+            await setDoc(docRef, {
+              id: idProducto,
+              name: formData.name,
+              category: formData.category,
+              stock: parseInt(formData.stock),
+              price: parseFloat(formData.price)
+            });
+            toast.success('Producto agregado correctamente');
+          }
         }
       }
       
       setShowModal(false);
-      setFormData({ id: '', name: '', category: '', stock: '', price: '', idFormulas: [], idEsencia: '', formulasPrices: {} });
+      setFormData({ id: '', name: '', category: '', stock: '', price: '', idFormulas: [], idEsencia: '', formulasPrices: {}, esenciaGramos: '' });
       setEditingId(null);
       cargarProductos();
     } catch (err) {
@@ -362,7 +417,8 @@ else {
       price: producto.price,
       idFormulas: producto.idFormula ? [producto.idFormula] : [],
       idEsencia: producto.idEsencia || '',
-      formulasPrices: producto.idFormula ? { [producto.idFormula]: producto.price } : {}
+      formulasPrices: {}, // ya no usamos precios por fórmula
+      esenciaGramos: producto.esenciaGramos || ''
     });
     setEditingId(producto.documentId);
     setShowModal(true);
@@ -390,9 +446,13 @@ else {
         ID: p.id,
         Nombre: p.name,
         Categoría: p.category,
-        Stock: p.stock,
+        // stock sólo para productos sin fórmula
+        Stock: p.idFormula ? '' : p.stock,
+        // Precio general (ahora siempre en "Precio", inclusive para fórmulas)
         Precio: p.price,
-        'ID Fórmula': p.idFormula || ''
+        'ID Fórmula': p.idFormula || '',
+        'ID Esencia': p.idEsencia || '',
+        'Esencia Gramos': p.esenciaGramos || ''
       }));
 
       const ws = XLSX.utils.json_to_sheet(datos);
@@ -405,7 +465,9 @@ else {
         { wch: 15 },
         { wch: 10 },
         { wch: 12 },
-        { wch: 15 }
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 12 }
       ];
 
       XLSX.writeFile(wb, 'productos.xlsx');
@@ -423,9 +485,11 @@ else {
           ID: '000000000001',
           Nombre: 'EJEMPLO PERFUME',
           Categoría: 'PERFUME',
-          Stock: 50,
-          Precio: 120000,
-          'ID Fórmula': 'FORMULA001'
+          Stock: '', // Para fórmulas: dejar vacío (no se requiere stock)
+          Precio: 120000, // precio para fórmula en 'Precio'
+          'ID Fórmula': 'FORMULA001',
+          'ID Esencia': 'ESENCIA001',
+          'Esencia Gramos': ''
         },
         {
           ID: '000000000002',
@@ -433,7 +497,19 @@ else {
           Categoría: 'COLONIA',
           Stock: 30,
           Precio: 85000,
-          'ID Fórmula': ''
+          'ID Fórmula': '',
+          'ID Esencia': '',
+          'Esencia Gramos': ''
+        },
+        {
+          ID: '000000000003',
+          Nombre: 'ADICIONAL EJEMPLO',
+          Categoría: 'ADICIONALES',
+          Stock: '',
+          Precio: 5000,
+          'ID Fórmula': '',
+          'ID Esencia': 'ESENCIA002',
+          'Esencia Gramos': 5
         }
       ];
 
@@ -447,7 +523,9 @@ else {
         { wch: 15 },
         { wch: 10 },
         { wch: 12 },
-        { wch: 15 }
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 12 }
       ];
 
       XLSX.writeFile(wb, 'plantilla_productos.xlsx');
@@ -472,26 +550,77 @@ else {
 
         setLoading(true);
         let importados = 0;
+        let saltados = 0;
         
         for (const row of jsonData) {
-          if (row.Nombre && row.Categoría && row.Stock !== undefined && row.Precio !== undefined) {
+          // Campos básicos
+          if (!row.Nombre || !row.Categoría) {
+            saltados++; // fila inválida
+            continue;
+          }
+
+          const categoriaUpper = (row.Categoría || '').toString().trim().toUpperCase();
+          const tieneFormula = row['ID Fórmula'] && row['ID Fórmula'].toString().trim() !== '';
+          const precioRaw = row['Precio'] !== undefined ? row['Precio'] : '';
+          const stockRaw = row['Stock'] !== undefined ? row['Stock'] : '';
+          const idEsenciaRaw = row['ID Esencia'] !== undefined ? row['ID Esencia'] : '';
+          const gramosRaw = row['Esencia Gramos'] !== undefined ? row['Esencia Gramos'] : '';
+
+          if (tieneFormula) {
+            // Para productos con fórmula: se requiere precio en "Precio"
+            if (precioRaw === '' || precioRaw === undefined) {
+              saltados++;
+              continue; // sin precio -> saltar
+            }
             const idProducto = row.ID ? row.ID.toString().padStart(12, '0') : generarIdIncremental();
             const docRef = doc(db, 'PRODUCTOS', idProducto);
-            // Sólo incluir idFormula si viene en la fila (no crear campo vacío/null)
-            const dataToSave = {
+            // NO guardar stock para productos con fórmula
+            await setDoc(docRef, {
               id: idProducto,
               name: row.Nombre,
               category: row.Categoría,
-              stock: parseInt(row.Stock),
-              price: parseFloat(row.Precio)
-            };
-            if (row['ID Fórmula']) dataToSave.idFormula = row['ID Fórmula'];
-            await setDoc(docRef, dataToSave);
-             importados++;
+              price: parseFloat(precioRaw),
+              idFormula: row['ID Fórmula'],
+              idEsencia: idEsenciaRaw || deleteField()
+            });
+            importados++;
+          } else if (categoriaUpper === 'ADICIONALES') {
+            // ADICIONALES: requiere ID Esencia, Esencia Gramos y Precio (no stock)
+            if (!idEsenciaRaw || gramosRaw === undefined || gramosRaw === '' || precioRaw === '' || precioRaw === undefined) {
+              saltados++;
+              continue;
+            }
+            const idProducto = row.ID ? row.ID.toString().padStart(12, '0') : generarIdIncremental();
+            const docRef = doc(db, 'PRODUCTOS', idProducto);
+            await setDoc(docRef, {
+              id: idProducto,
+              name: row.Nombre,
+              category: row.Categoría,
+              price: parseFloat(precioRaw),
+              idEsencia: idEsenciaRaw,
+              esenciaGramos: Number(gramosRaw)
+            });
+            importados++;
+          } else {
+            // Producto sin fórmula: requiere stock y precio
+            if (precioRaw === '' || precioRaw === undefined || stockRaw === undefined || stockRaw === '') {
+              saltados++;
+              continue;
+            }
+            const idProducto = row.ID ? row.ID.toString().padStart(12, '0') : generarIdIncremental();
+            const docRef = doc(db, 'PRODUCTOS', idProducto);
+            await setDoc(docRef, {
+              id: idProducto,
+              name: row.Nombre,
+              category: row.Categoría,
+              stock: parseInt(stockRaw),
+              price: parseFloat(precioRaw)
+            });
+            importados++;
           }
         }
 
-        toast.success(`${importados} productos importados correctamente`);
+        toast.success(`${importados} productos importados correctamente${saltados ? `, ${saltados} fila(s) omitida(s)` : ''}`);
         setShowImportModal(false);
         cargarProductos();
       } catch (err) {
@@ -507,7 +636,7 @@ else {
 
   const closeModal = () => {
     setShowModal(false);
-    setFormData({ id: '', name: '', category: '', stock: '', price: '', idFormulas: [], idEsencia: '', formulasPrices: {} });
+    setFormData({ id: '', name: '', category: '', stock: '', price: '', idFormulas: [], idEsencia: '', formulasPrices: {}, esenciaGramos: '' });
     setEditingId(null);
     setShowFormulas(false);
   };
@@ -647,7 +776,7 @@ else {
                   name="category" 
                   value={formData.category}
                   onChange={handleInputChange}
-                  placeholder="Ej: Perfume, Colonia"
+                  placeholder="Ej: Perfume, Colonia, ADICIONALES"
                   list="categorias-list"
                   required
                 />
@@ -723,24 +852,20 @@ else {
                     </div>
                   </div>
 
-                  {/* Inputs de precio por fórmula seleccionada */}
+                  {/* Precio único para producto(s) con fórmula (antes: precio por fórmula) */}
                   {formData.idFormulas.length > 0 && (
-                    <div className="formulas-prices">
-                      <label style={{ fontWeight: 600, marginBottom: '12px', display: 'block' }}>Precio por Fórmula *</label>
-                      {formData.idFormulas.map(formulaId => (
-                        <div key={formulaId} className="form-group" style={{ marginBottom: '12px' }}>
-                          <label>{formulaId}</label>
-                          <input 
-                            type="number" 
-                            value={formData.formulasPrices[formulaId] || ''}
-                            onChange={(e) => handleFormulaPriceChange(formulaId, e.target.value)}
-                            placeholder={`Precio para ${formulaId}`}
-                            step="0.01"
-                            min="0"
-                            required
-                          />
-                        </div>
-                      ))}
+                    <div className="form-group">
+                      <label>Precio *</label>
+                      <input 
+                        type="number" 
+                        name="price"
+                        value={formData.price}
+                        onChange={handleInputChange}
+                        placeholder="Precio"
+                        step="0.01"
+                        min="0"
+                        required
+                      />
                     </div>
                   )}
 
@@ -758,7 +883,7 @@ else {
                         <option value="">-- Selecciona una esencia --</option>
                         {esencias.map(esencia => (
                           <option key={esencia.id} value={esencia.id}>
-                            {esencia.nombre || esencia.name || esencia.id}
+                            {esencia.name || esencia.nombre || esencia.id} (stock: {esencia.stock || 0}g)
                           </option>
                         ))}
                       </select>
@@ -767,17 +892,38 @@ else {
                 </>
               )}
 
-              {!tieneFormulas && (
+              {!tieneFormulas && ((formData.category || '').toString().trim().toUpperCase() === 'ADICIONALES') ? (
                 <>
                   <div className="form-group">
-                    <label>Stock *</label>
+                    <label>Esencia *</label>
+                    {loadingEsencias ? (
+                      <p style={{ color: 'var(--color-text-soft)', fontSize: '13px' }}>Cargando esencias...</p>
+                    ) : (
+                      <select
+                        name="idEsencia"
+                        value={formData.idEsencia}
+                        onChange={handleInputChange}
+                        required
+                      >
+                        <option value="">-- Selecciona una esencia --</option>
+                        {esencias.map(esencia => (
+                          <option key={esencia.id} value={esencia.id}>
+                            {esencia.name || esencia.nombre || esencia.id} (stock: {esencia.stock || 0}g)
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  <div className="form-group">
+                    <label>Gramos por unidad *</label>
                     <input 
                       type="number" 
-                      name="stock" 
-                      value={formData.stock}
+                      name="esenciaGramos" 
+                      value={formData.esenciaGramos}
                       onChange={handleInputChange}
-                      placeholder="Cantidad"
-                      min="0"
+                      placeholder="Ej: 5"
+                      min="1"
                       required
                     />
                   </div>
@@ -796,6 +942,38 @@ else {
                     />
                   </div>
                 </>
+              ) : (
+                // si no es ADICIONALES y no tiene fórmulas, mostrar stock + precio (existing)
+                !tieneFormulas && (
+                  <>
+                    <div className="form-group">
+                      <label>Stock *</label>
+                      <input 
+                        type="number" 
+                        name="stock" 
+                        value={formData.stock}
+                        onChange={handleInputChange}
+                        placeholder="Cantidad"
+                        min="0"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Precio *</label>
+                      <input 
+                        type="number" 
+                        name="price" 
+                        value={formData.price}
+                        onChange={handleInputChange}
+                        placeholder="Precio"
+                        step="0.01"
+                        min="0"
+                        required
+                      />
+                    </div>
+                  </>
+                )
               )}
 
               <div className="form-actions">
@@ -831,6 +1009,8 @@ else {
                         <th>Columna D</th>
                         <th>Columna E</th>
                         <th>Columna F</th>
+                        <th>Columna G</th>
+                        <th>Columna H</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -841,6 +1021,8 @@ else {
                         <td className="header-cell">Stock</td>
                         <td className="header-cell">Precio</td>
                         <td className="header-cell">ID Fórmula</td>
+                        <td className="header-cell">ID Esencia</td>
+                        <td className="header-cell">Esencia Gramos</td>
                       </tr>
                       <tr>
                         <td className="type-cell">String (12 dígitos)</td>
@@ -849,14 +1031,18 @@ else {
                         <td className="type-cell">Número</td>
                         <td className="type-cell">Número</td>
                         <td className="type-cell">String (opcional)</td>
+                        <td className="type-cell">String (opcional)</td>
+                        <td className="type-cell">Número (opcional)</td>
                       </tr>
                       <tr>
                         <td className="example-cell">000000000001</td>
                         <td className="example-cell">PERFUME ROSA</td>
                         <td className="example-cell">PERFUME</td>
-                        <td className="example-cell">50</td>
+                        <td className="example-cell"></td>
                         <td className="example-cell">120000</td>
                         <td className="example-cell">FORMULA001</td>
+                        <td className="example-cell">ESENCIA001</td>
+                        <td className="example-cell"></td>
                       </tr>
                       <tr>
                         <td className="example-cell">000000000002</td>
@@ -865,6 +1051,18 @@ else {
                         <td className="example-cell">30</td>
                         <td className="example-cell">85000</td>
                         <td className="example-cell"></td>
+                        <td className="example-cell"></td>
+                        <td className="example-cell"></td>
+                      </tr>
+                      <tr>
+                        <td className="example-cell">000000000003</td>
+                        <td className="example-cell">ADICIONAL EJEMPLO</td>
+                        <td className="example-cell">ADICIONALES</td>
+                        <td className="example-cell"></td>
+                        <td className="example-cell">5000</td>
+                        <td className="example-cell"></td>
+                        <td className="example-cell">ESENCIA002</td>
+                        <td className="example-cell">5</td>
                       </tr>
                     </tbody>
                   </table>
@@ -876,9 +1074,10 @@ else {
                     <li><strong>ID:</strong> Debe tener 12 dígitos con ceros a la izquierda. Se genera automáticamente si está vacío.</li>
                     <li><strong>Nombre:</strong> Será convertido automáticamente a MAYÚSCULAS.</li>
                     <li><strong>Categoría:</strong> Campo obligatorio. Debe coincidir con categorías existentes o crear nuevas.</li>
-                    <li><strong>Stock:</strong> Número entero positivo obligatorio.</li>
-                    <li><strong>Precio:</strong> Número decimal obligatorio.</li>
+                    <li><strong>Stock:</strong> Para productos SIN fórmula: campo obligatorio. Para productos CON fórmula: no es necesario (dejar en blanco).</li>
+                    <li><strong>Precio:</strong> Para productos CON fórmula: indique el precio en esta columna. Para productos SIN fórmula: número decimal obligatorio.</li>
                     <li><strong>ID Fórmula:</strong> Campo opcional. Déjalo en blanco si no aplica.</li>
+                    <li><strong>ID Esencia / Esencia Gramos:</strong> Para ADICIONALES, deben proveerse. Para productos con fórmula, puedes indicar ID Esencia si aplica.</li>
                   </ul>
                 </div>
               </div>
