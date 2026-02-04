@@ -115,7 +115,7 @@
   transition: all 0.3s;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   user-select: none;
-  min-height: 240px;
+  max-height: 240px;
 }
 
 .producto-card:hover {
@@ -192,14 +192,7 @@
   font-weight: 600;
 }
 
-.producto-medida {
-  display: inline-block;
-  font-size: 14px;
-  color: var(--color-primary);
-  margin-top: 3px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-}
+
 
 /* Search Styles */
 .search-container-worker {

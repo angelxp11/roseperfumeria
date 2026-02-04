@@ -389,9 +389,7 @@ export default function Inventario({ onAgregarAlCarrito }) {
 										{prod.tieneFormula && (
 											<span className="producto-formula">Con fórmula</span>
 										)}
-										{prod.medida && (
-											<span className="producto-medida">{prod.medida}</span>
-										)}
+										
 									</div>
 								</div>
 							))}
