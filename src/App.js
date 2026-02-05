@@ -56,13 +56,21 @@ function App() {
   };
 
   return (
-    <>
-      {renderContent()}
+  <>
+    {renderContent()}
 
-      {/* 🔔 Toast GLOBAL */}
-      
-    </>
-  );
+    {/* 🔔 Toast GLOBAL (SIEMPRE MONTADO) */}
+    <ToastContainer
+      position="top-right"
+      autoClose={3000}
+      limit={3}
+      newestOnTop
+      pauseOnHover
+      closeOnClick
+    />
+  </>
+);
+
 }
 
 export default App;

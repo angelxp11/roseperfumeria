@@ -3,7 +3,8 @@ import { collection, getDocs, doc, getDoc, updateDoc, increment, setDoc } from '
 import { db } from '../../server/firebase';
 import { getAuth } from 'firebase/auth';
 import { FaSearch, FaTimes, FaFileInvoice, FaTrash } from 'react-icons/fa';
-import { toast } from 'react-toastify';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import './facturas.css';
 
 async function obtenerNombreEmpleado() {
@@ -97,7 +98,7 @@ export default function Facturas() {
       setMetodosDisponibles(Array.from(metodosSet).sort());
     } catch (err) {
       console.error('Error al cargar facturas:', err);
-      toast.error('Error al cargar facturas');
+      toast.error('Error al cargar facturas', { containerId: 'local', position: 'top-right' });
     } finally {
       setLoading(false);
     }
@@ -255,7 +256,7 @@ export default function Facturas() {
 
   const abrirModalCancelar = (factura) => {
     if (factura.estado === 'CANCELADA') {
-      toast.warning('Esta factura ya está cancelada');
+      toast.warning('Esta factura ya está cancelada', { containerId: 'local', position: 'top-right' });
       return;
     }
     setFacturaCancelar(factura);
@@ -361,7 +362,7 @@ export default function Facturas() {
 
   const cancelarFactura = async () => {
     if (!motivoCancelacion.trim()) {
-      toast.warning('Debes ingresar un motivo de cancelación');
+      toast.warning('Debes ingresar un motivo de cancelación', { containerId: 'local', position: 'top-right' });
       return;
     }
 
@@ -403,13 +404,13 @@ export default function Facturas() {
         // Registrar movimiento
         await registrarMovimiento(facturaCancelar.facturaId, motivoCancelacion, montoTotal);
         
-        toast.success(`Factura #${facturaCancelar.facturaId} cancelada. Dinero devuelto: $${formatNumber(montoTotal)}`);
+        toast.success(`Factura #${facturaCancelar.facturaId} cancelada. Dinero devuelto: $${formatNumber(montoTotal)}`, { containerId: 'local', position: 'top-right', autoClose: 4000 });
         setModalCancelar(false);
         cargarFacturas();
       }
     } catch (err) {
       console.error('Error al cancelar factura:', err);
-      toast.error('Error al cancelar factura');
+      toast.error('Error al cancelar factura', { containerId: 'local', position: 'top-right', autoClose: 4000 });
     } finally {
       setCancelando(false);
     }
@@ -601,6 +602,9 @@ export default function Facturas() {
           </div>
         </div>
       )}
+
+      {/* Toast local para este componente */}
+      <ToastContainer containerId="local" position="top-right" autoClose={3000} limit={3} newestOnTop pauseOnHover closeOnClick />
     </div>
   );
 }

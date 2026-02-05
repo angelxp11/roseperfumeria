@@ -11,7 +11,6 @@ import {
   updateDoc,
   increment,
   setDoc,
-  query,
   where
 } from 'firebase/firestore';
 
@@ -57,14 +56,11 @@ export default function MetodoDePago({ total, onClose, onCompletarCompra, items 
   const todosMetodos = metodosPago;
  
   // Incrementar balance en PAYMENT (docId) usando increment para evitar race conditions
+  // DESHABILITADO: en el punto de venta solo se debe actualizar CAJAS, no PAYMENT (wallet).
   const incrementarPayment = async (docId, monto) => {
-    try {
-      if (!docId || Number(monto) === 0) return;
-      const ref = doc(db, 'PAYMENT', docId);
-      await updateDoc(ref, { balance: increment(Number(monto)) });
-    } catch (e) {
-      console.error('Error incrementando PAYMENT:', e);
-    }
+    // no-op intencional
+    console.warn('incrementarPayment deshabilitado en POS. docId:', docId, 'monto:', monto);
+    return;
   };
 
   /* =======================
@@ -306,14 +302,8 @@ const descontarInsumosPorFormula = async (items = []) => {
           setCargando(false);
           return;
         }
-        // incrementar CAJA y PAYMENT (si existe método EFECTIVO)
-        if (efectivo) {
-          await incrementarCaja('EFECTIVO', total);
-          await incrementarPayment(efectivo.docId, total);
-        } else {
-          // fallback: sólo caja
-          await incrementarCaja('EFECTIVO', total);
-        }
+        // actualizar sólo CAJA (NO WALLET/PAYMENT)
+        await incrementarCaja('EFECTIVO', total);
         await crearFactura('Efectivo', total, { metodo: 'Efectivo' });
       }
 
@@ -321,9 +311,8 @@ const descontarInsumosPorFormula = async (items = []) => {
         if (cuentaTransferencia) {
           const clave = obtenerClaveCaja(cuentaTransferencia);
           const nombreMetodo = obtenerNombreMetodoPago(cuentaTransferencia);
+          // actualizar sólo CAJA (NO WALLET/PAYMENT)
           await incrementarCaja(clave, total);
-          // actualizar PAYMENT por docId
-          await incrementarPayment(cuentaTransferencia, total);
           await crearFactura(nombreMetodo, total, { metodo: nombreMetodo });
         }
       }
@@ -334,25 +323,21 @@ const descontarInsumosPorFormula = async (items = []) => {
         
         let detalleMetodos = [];
 
-        if (metodos.primero === 'efectivo' && efectivo) {
+        if (metodos.primero === 'efectivo') {
           await incrementarCaja('EFECTIVO', monto1);
-          await incrementarPayment(efectivo.docId, monto1);
           detalleMetodos.push({ metodo: 'Efectivo', monto: monto1 });
         }
         if (metodos.primero === 'transferencia' && metodos.cuentaPrimero) {
           await incrementarCaja(obtenerClaveCaja(metodos.cuentaPrimero), monto1);
-          await incrementarPayment(metodos.cuentaPrimero, monto1);
           const nombreMetodo = obtenerNombreMetodoPago(metodos.cuentaPrimero);
           detalleMetodos.push({ metodo: nombreMetodo, monto: monto1 });
         }
-        if (metodos.segundo === 'efectivo' && efectivo) {
+        if (metodos.segundo === 'efectivo') {
           await incrementarCaja('EFECTIVO', monto2);
-          await incrementarPayment(efectivo.docId, monto2);
           detalleMetodos.push({ metodo: 'Efectivo', monto: monto2 });
         }
         if (metodos.segundo === 'transferencia' && metodos.cuentaSegundo) {
           await incrementarCaja(obtenerClaveCaja(metodos.cuentaSegundo), monto2);
-          await incrementarPayment(metodos.cuentaSegundo, monto2);
           const nombreMetodo = obtenerNombreMetodoPago(metodos.cuentaSegundo);
           detalleMetodos.push({ metodo: nombreMetodo, monto: monto2 });
         }
@@ -361,13 +346,10 @@ const descontarInsumosPorFormula = async (items = []) => {
       }
 
       if (metodoSeleccionado === 'tarjeta') {
-        // si existe un PAYMENT para tarjeta, incrementar su balance
-        const tarjetaMethod = metodosPago.find(m => (m.type || '').toString().trim().toUpperCase() === 'TARJETA' || (m.name || '').toLowerCase().includes('tarjeta'));
-        if (tarjetaMethod) {
-          await incrementarPayment(tarjetaMethod.docId, total);
-        }
+        // actualizar sólo CAJA (si aplica) o solo crear factura — NO WALLET/PAYMENT
         await crearFactura('Tarjeta', total, { metodo: 'Tarjeta' });
       }
+
       // después de crear factura y actualizar caja
       await descontarInsumosPorFormula(items);
 
