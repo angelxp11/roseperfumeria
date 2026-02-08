@@ -67,84 +67,109 @@ export default function MetodoDePago({ total, onClose, onCompletarCompra, items 
      HELPERS
   ======================= */
 const descontarInsumosPorFormula = async (items = []) => {
-  console.log('🟡 Iniciando descuento de insumos');
-  console.log('🟡 Items recibidos:', items);
-
-  for (const item of items) {
-    console.log('➡️ Procesando item:', item);
-    console.log('   id:', item.id);
-    console.log('   name:', item.name);
-    console.log('   idFormula:', item.idFormula);
-    console.log('   idEsencia:', item.idEsencia);
-    console.log('   documentId:', item.documentId);
-    console.log('   cantidad:', item.cantidad);
-
-    const cantidad = Number(item.cantidad) || 0;
-
-    if (cantidad <= 0) {
-      console.warn('❌ Cantidad inválida, se omite');
-      continue;
-    }
-
-    // NUEVO: Si es un ADICIONAL (usa stock de ESENCIA), descontar desde ESENCIA
-    if (item.isAdicional || (item.category || '').toString().trim().toUpperCase() === 'ADICIONALES') {
-      const gramosPorUnidad = Number(item.esenciaGramos || 0);
-      const totalGramos = gramosPorUnidad * cantidad;
-      console.log(`🌿 ADICIONAL usando ESENCIA ${item.idEsencia} - total gramos a descontar: ${totalGramos}`);
-      if (item.idEsencia && totalGramos > 0) {
-        try {
-          const ref = doc(db, 'ESENCIA', item.idEsencia);
-          await updateDoc(ref, { stock: increment(-totalGramos) });
-          console.log(`✅ Descontados ${totalGramos}g de ESENCIA ${item.idEsencia}`);
-        } catch (error) {
-          console.error('🔥 Error descontando ESENCIA para adicional', error);
+   console.log('🟡 Iniciando descuento de insumos');
+   console.log('🟡 Items recibidos:', items);
+ 
+   for (const item of items) {
+     console.log('➡️ Procesando item:', item);
+     console.log('   id:', item.id);
+     console.log('   name:', item.name);
+     console.log('   idFormula:', item.idFormula);
+     console.log('   idEsencia:', item.idEsencia);
+     console.log('   documentId:', item.documentId);
+     console.log('   cantidad:', item.cantidad);
+ 
+     const cantidad = Number(item.cantidad) || 0;
+ 
+     if (cantidad <= 0) {
+       console.warn('❌ Cantidad inválida, se omite');
+       continue;
+     }
+ 
+    // ---- NUEVO: Si el ítem corresponde directamente a un INSUMO (colección INSUMOS), descontar desde INSUMOS ----
+    try {
+      const posibleIdInsumo = (item.idEsencia || item.id || item.documentId || '').toString();
+      if (posibleIdInsumo) {
+        const insumoRef = doc(db, 'INSUMOS', posibleIdInsumo);
+        const insumoSnap = await getDoc(insumoRef);
+        if (insumoSnap.exists()) {
+          // Determinar gramos a descontar: preferir esenciaGramos, sino cantidad, sino 1
+          const gramosPorUnidad = Number(item.esenciaGramos || item.esencia_gr || item.gramos || item.cantidad) || 1;
+          const totalGramos = gramosPorUnidad * cantidad;
+          if (totalGramos > 0) {
+            await updateDoc(insumoRef, { stock: increment(-totalGramos) });
+            console.log(`✅ Descontados ${totalGramos}g del INSUMO ${posibleIdInsumo}`);
+          } else {
+            console.warn('⚠️ Total gramos a descontar inválido para insumo:', posibleIdInsumo);
+          }
+          // Ya procesado como insumo: saltar al siguiente item
+          continue;
         }
-      } else {
-        console.warn('⚠️ Item adicional sin idEsencia o gramos inválidos');
       }
-      continue;
+    } catch (err) {
+      console.error('Error verificando/descontando INSUMO:', err);
+      // si falla la verificación, continuar con resto de lógica
     }
-
+ 
+     // NUEVO: Si es un ADICIONAL (usa stock de ESENCIA), descontar desde ESENCIA
+     if (item.isAdicional || (item.category || '').toString().trim().toUpperCase() === 'ADICIONALES') {
+       const gramosPorUnidad = Number(item.esenciaGramos || 0);
+       const totalGramos = gramosPorUnidad * cantidad;
+       console.log(`🌿 ADICIONAL usando ESENCIA ${item.idEsencia} - total gramos a descontar: ${totalGramos}`);
+       if (item.idEsencia && totalGramos > 0) {
+         try {
+           const ref = doc(db, 'ESENCIA', item.idEsencia);
+           await updateDoc(ref, { stock: increment(-totalGramos) });
+           console.log(`✅ Descontados ${totalGramos}g de ESENCIA ${item.idEsencia}`);
+         } catch (error) {
+           console.error('🔥 Error descontando ESENCIA para adicional', error);
+         }
+       } else {
+         console.warn('⚠️ Item adicional sin idEsencia o gramos inválidos');
+       }
+       continue;
+     }
+ 
     /* =================================================
        CASO 1: PRODUCTO CON FÓRMULA
     ================================================= */
     if (item.idFormula) {
       console.log('📦 CASO 1: Producto con fórmula');
-
+ 
       // 1️⃣ Obtener fórmula
       console.log('🔍 Buscando fórmula:', item.idFormula);
-
+ 
       const formulaRef = doc(db, 'FORMULAS', item.idFormula);
       const formulaSnap = await getDoc(formulaRef);
-
+ 
       if (!formulaSnap.exists()) {
         console.error('❌ NO existe la fórmula:', item.idFormula);
         continue;
       }
-
+ 
       const formula = formulaSnap.data();
       console.log('✅ Fórmula encontrada:', formula);
-
+ 
       // 2️⃣ Insumos generales (ALCOHOL, FIJADOR, FEROMONAS)
       const insumos = [
         { id: 'ALCOHOL', campo: 'alcohol' },
         { id: 'FIJADOR', campo: 'fijadorgr' },
         { id: 'FEROMONAS', campo: 'feromonasgotas' }
       ];
-
+ 
       for (const insumo of insumos) {
         const valor = Number(formula[insumo.campo]) || 0;
         const total = valor * cantidad;
-
+ 
         console.log(`🧪 Insumo ${insumo.id}`);
         console.log(`   Valor por unidad: ${valor}`);
         console.log(`   Total a descontar: ${total}`);
-
+ 
         if (total <= 0) {
           console.warn(`⚠️ No se descuenta ${insumo.id} (total <= 0)`);
           continue;
         }
-
+ 
         try {
           const ref = doc(db, 'INSUMOS', insumo.id);
           await updateDoc(ref, {
@@ -155,15 +180,15 @@ const descontarInsumosPorFormula = async (items = []) => {
           console.error(`🔥 Error descontando ${insumo.id}`, error);
         }
       }
-
+ 
       // 3️⃣ Esencia específica (por idEsencia)
       if (item.idEsencia) {
         const esenciaUsada = Number(formula.esenciagr) || 0;
         const totalEsencia = esenciaUsada * cantidad;
-
+ 
         console.log('🌸 Esencia específica:', item.idEsencia);
         console.log('   Total a descontar:', totalEsencia);
-
+ 
         if (totalEsencia > 0) {
           try {
             const esenciaRef = doc(db, 'ESENCIA', item.idEsencia);
@@ -178,31 +203,31 @@ const descontarInsumosPorFormula = async (items = []) => {
       } else {
         console.warn('⚠️ Item sin idEsencia');
       }
-
+ 
       continue;
     }
-
+ 
     /* =================================================
        CASO 2: PRODUCTO NORMAL (SIN FÓRMULA)
     ================================================= */
     console.log('📦 CASO 2: Producto normal sin fórmula');
-
+ 
     // Si el item es un refill (marca isRefill=true o nombre "REFILL ..."), no descontamos el envase
     const esRefill = !!item.isRefill || (item.name && item.name.toString().toUpperCase().startsWith('REFILL'));
     if (esRefill) {
       console.log(`⚠️ Saltando descuento de stock para envase (refill): ${item.name || item.id || item.documentId}`);
       continue;
     }
-
+ 
     if (item.documentId) {
       try {
         const productoRef = doc(db, 'PRODUCTOS', item.documentId);
         console.log(`✏️ Descontando ${cantidad} del producto ${item.documentId}`);
-
+ 
         await updateDoc(productoRef, {
           stock: increment(-cantidad)
         });
-
+ 
         console.log(`✅ Descontado ${cantidad} del producto`);
       } catch (error) {
         console.error('🔥 Error descontando stock del producto', error);
@@ -211,7 +236,7 @@ const descontarInsumosPorFormula = async (items = []) => {
       console.warn('⚠️ Item sin documentId');
     }
   }
-
+ 
   console.log('🟢 Fin descuento de insumos');
 };
 

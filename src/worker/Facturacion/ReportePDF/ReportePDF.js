@@ -286,26 +286,31 @@ class ReportePDF {
       let totalCantidad = 0;
 
       productos.forEach(p => {
-        if (y + rowHeight > 280) {
-          pdf.addPage();
-          y = 20;
-        }
-
         const total = p.precio_unitario * p.cantidad;
         totalProductos += total;
         totalCantidad += p.cantidad;
 
+        const nameLines = pdf.splitTextToSize(p.nombre, cols[1] - cols[0] - 2);
+        const rowHeightAdjusted = Math.max(rowHeight, nameLines.length * 4 + 3);
+
+        if (y + rowHeightAdjusted > 280) {
+          pdf.addPage();
+          y = 20;
+        }
+
         const textY = y + 5;
 
-        pdf.text(p.nombre, cols[0], textY);
+        nameLines.forEach((line, i) => {
+          pdf.text(line, cols[0] + 1, textY + i * 4);
+        });
         pdf.text(this.formatMoney(p.precio_unitario), cols[1], textY);
         pdf.text(String(p.cantidad), cols[2], textY);
         pdf.text(this.formatMoney(total), cols[3], textY);
 
         pdf.setDrawColor(200);
-        pdf.line(15, y + rowHeight, 195, y + rowHeight);
+        pdf.line(15, y + rowHeightAdjusted, 195, y + rowHeightAdjusted);
 
-        y += rowHeight;
+        y += rowHeightAdjusted;
       });
 
       pdf.setFillColor(220);
@@ -445,56 +450,62 @@ class ReportePDF {
     }
 
     /* ===== DENOMINACIONES ===== */
-    const denominaciones = await this.getDenominaciones(endDate);
-    if (Object.keys(denominaciones).length > 0) {
-      if (y > 240) {
+    /* ===== DENOMINACIONES (SOLO HOY) ===== */
+const isSingleDay =
+  this.formatDate(startDate) === this.formatDate(endDate);
+
+const isToday =
+  this.formatDate(endDate) === this.formatDate(new Date());
+
+if (isSingleDay && isToday) {
+  const denominaciones = await this.getDenominaciones(endDate);
+
+  if (Object.keys(denominaciones).length > 0) {
+    if (y > 240) {
+      pdf.addPage();
+      y = 20;
+    }
+
+    pdf.setFontSize(12);
+    pdf.setFont(undefined, 'bold');
+    pdf.setTextColor(40);
+    pdf.text('Denominaciones de Efectivo', 15, y);
+    y += 7;
+
+    pdf.setFontSize(9);
+    pdf.setFillColor(230);
+    pdf.rect(15, y - 5, 180, 7, 'F');
+
+    const colsDenom = [15, 85, 135];
+    pdf.text('Denominación', colsDenom[0], y);
+    pdf.text('Cantidad', colsDenom[1], y);
+    pdf.text('Subtotal', colsDenom[2], y);
+    y += 3;
+
+    pdf.setFont(undefined, 'normal');
+
+    Object.entries(denominaciones).forEach(([denom, data]) => {
+      if (y > 275) {
         pdf.addPage();
         y = 20;
       }
 
-      pdf.setFontSize(12);
-      pdf.setFont(undefined, 'bold');
-      pdf.setTextColor(40);
-      pdf.text('Denominaciones de Efectivo', 15, y);
+      pdf.setFillColor(245);
+      pdf.rect(15, y, 180, 7, 'F');
+      pdf.setDrawColor(200);
+      pdf.rect(15, y, 180, 7);
+
+      pdf.text(this.formatMoney(Number(denom)), colsDenom[0] + 2, y + 5);
+      pdf.text(String(data.count || 0), colsDenom[1] + 2, y + 5);
+      pdf.text(this.formatMoney(data.total || 0), colsDenom[2] + 2, y + 5);
+
       y += 7;
+    });
 
-      pdf.setFontSize(9);
-      pdf.setFillColor(230);
-      pdf.rect(15, y - 5, 180, 7, 'F');
+    y += 5;
+  }
+}
 
-      const colsDenom = [15, 100];
-      pdf.text('Denominación', colsDenom[0], y);
-      pdf.text('Cantidad / Subtotal', colsDenom[1], y);
-      y += 3;
-
-      pdf.setFont(undefined, 'normal');
-      pdf.setFontSize(9);
-
-      Object.entries(denominaciones).forEach(([denom, data]) => {
-        if (y > 275) {
-          pdf.addPage();
-          y = 20;
-        }
-
-        pdf.setFillColor(245);
-        pdf.rect(15, y, 180, 7, 'F');
-        pdf.setDrawColor(200);
-        pdf.rect(15, y, 180, 7);
-
-        const denomValue = Number(denom);
-        const count = data.count || 0;
-        const subtotal = data.total || 0;
-        const label = `${this.formatMoney(denomValue)} (${count})`;
-        const value = this.formatMoney(subtotal);
-
-        pdf.text(label, colsDenom[0] + 2, y + 5);
-        pdf.text(value, colsDenom[1] + 2, y + 5);
-
-        y += 7;
-      });
-
-      y += 5;
-    }
 
     if (movimientos.length) {
       if (y > 240) {

@@ -191,7 +191,7 @@ export default function Facturas() {
         usuario: usuarioActual,
         motivo: motivo,
         monto: monto,
-        fecha: new Date().toISOString(),
+        momento: new Date().toISOString(),
         descripcion: `La factura #${facturaId} fue cancelada por ${usuarioActual}`
       };
 
@@ -272,6 +272,31 @@ export default function Facturas() {
       for (const prod of productos) {
         const cantidad = Number(prod.cantidad) || 0;
         if (cantidad <= 0) continue;
+
+        // ---- NUEVO: Restaurar INSUMO si el producto corresponde a la colección INSUMOS ----
+        try {
+          // PRIORIDAD: si el producto guarda idEsencia (adicional o referencia), usarlo primero.
+          const posibleIdInsumo = (prod.idEsencia || prod.id || prod.documentId || '').toString();
+          if (posibleIdInsumo) {
+            const insRef = doc(db, 'INSUMOS', posibleIdInsumo);
+            const insSnap = await getDoc(insRef);
+            if (insSnap.exists()) {
+              // Determinar gramos a restaurar: preferir esenciaGramos, sino cantidad, sino 0
+              const gramosPorUnidad = Number(prod.esenciaGramos || prod.gramos || prod.cantidad) || 0;
+              const totalARestaurar = gramosPorUnidad * cantidad;
+              if (totalARestaurar > 0) {
+                try {
+                  await updateDoc(insRef, { stock: increment(totalARestaurar) });
+                  console.log(`✅ Restaurados ${totalARestaurar}g en INSUMO ${posibleIdInsumo}`);
+                } catch (err) {
+                  console.error('Error restaurando INSUMO:', err);
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error verificando/restaurando INSUMO por producto:', err);
+        }
 
         // Caso: producto con fórmula -> restaurar INSUMOS y ESENCIA si es posible
         if (prod.idFormula) {

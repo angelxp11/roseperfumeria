@@ -97,19 +97,20 @@ export default function AdminInventario() {
     try {
       setLoadingEsencias(true);
       const esenciasRef = collection(db, 'ESENCIA');
-      const snapshot = await getDocs(esenciasRef);
-      const esen = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      // Filtrar y excluir esencias destinadas a PRODUCCION (no deben mostrarse en el select)
+      const insumosRef = collection(db, 'INSUMOS');
+      const [esenciasSnap, insumosSnap] = await Promise.all([getDocs(esenciasRef), getDocs(insumosRef)]);
+      
+      const esen = esenciasSnap.docs.map(d => ({ documentId: d.id, id: d.id, tipo: 'ESENCIA', ...d.data() }));
+      const insu = insumosSnap.docs.map(d => ({ documentId: d.id, id: d.id, tipo: 'INSUMOS', ...d.data() }));
+      
+      // Excluir esencias destinadas a PRODUCCION
       const esenFiltradas = esen.filter(e => {
         const genero = (e.genero || '').toString().trim().toUpperCase();
         return genero !== 'PRODUCCION';
       });
-      setEsencias(esen);
-      // Reemplazar por las esencias filtradas
-      setEsencias(esenFiltradas);
+      
+      const combinadas = [...esenFiltradas, ...insu];
+      setEsencias(combinadas);
     } catch (err) {
       console.error('Error al cargar esencias:', err);
       toast.error('Error al cargar esencias');
@@ -882,8 +883,8 @@ else {
                       >
                         <option value="">-- Selecciona una esencia --</option>
                         {esencias.map(esencia => (
-                          <option key={esencia.id} value={esencia.id}>
-                            {esencia.name || esencia.nombre || esencia.id} (stock: {esencia.stock || 0}g)
+                          <option key={esencia.documentId} value={esencia.id}>
+                            {`${esencia.name || esencia.nombre || esencia.id} ${esencia.tipo === 'INSUMOS' ? '(INSUMO)' : '(ESENCIA)'} (stock: ${esencia.stock || 0}g)`}
                           </option>
                         ))}
                       </select>
@@ -905,10 +906,10 @@ else {
                         onChange={handleInputChange}
                         required
                       >
-                        <option value="">-- Selecciona una esencia --</option>
+                        <option value="">-- Selecciona una esencia/insumo --</option>
                         {esencias.map(esencia => (
-                          <option key={esencia.id} value={esencia.id}>
-                            {esencia.name || esencia.nombre || esencia.id} (stock: {esencia.stock || 0}g)
+                          <option key={esencia.documentId} value={esencia.id}>
+                            {`${esencia.name || esencia.nombre || esencia.id} ${esencia.tipo === 'INSUMOS' ? '(INSUMO)' : '(ESENCIA)'} (stock: ${esencia.stock || 0}g)`}
                           </option>
                         ))}
                       </select>

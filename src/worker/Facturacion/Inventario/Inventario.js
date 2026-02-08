@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, query, where, getDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, where, getDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../server/firebase';
 import { GiDelicatePerfume } from 'react-icons/gi';
 import { FaSearch, FaTimes, FaBoxes } from 'react-icons/fa';
@@ -219,7 +219,7 @@ export default function Inventario({ onAgregarAlCarrito }) {
 		}
 	};
 
-	const handleProductoClick = (producto) => {
+	const handleProductoClick = async (producto) => {
 		if (producto.tieneFormula && producto.idFormula) {
 			// Abrir modal de envases en vez de agregar directo
 			setProductoSeleccionado(producto);
@@ -228,6 +228,43 @@ export default function Inventario({ onAgregarAlCarrito }) {
 		} else {
 			// NUEVO: producto de categoría ADICIONALES -> abrir modal de selección de esencia y gramos
 			if ((producto.category || '').toString().trim().toUpperCase() === 'ADICIONALES') {
+				// Si el producto ya tiene idEsencia, verificar si es un INSUMO -> tratar directo
+				if (producto.idEsencia) {
+					try {
+						const insumoRef = doc(db, 'INSUMOS', producto.idEsencia);
+						const insumoSnap = await getDoc(insumoRef);
+						if (insumoSnap.exists()) {
+							const insumoData = insumoSnap.data();
+							const gramosPorUnidad = Number(producto.esenciaGramos) || 1;
+							const stockDisponible = Number(insumoData.stock || 0);
+							if (stockDisponible < gramosPorUnidad) {
+								alert(`Stock insuficiente del insumo ${insumoData.name || producto.idEsencia}. Disponible: ${stockDisponible}g`);
+								return;
+							}
+							// NOTA: no descontamos aquí para evitar doble descuento.
+							// El descuento se realizará durante el pago en metododepago.descontarInsumosPorFormula.
+							// Agregar al carrito como adicional que ya incluye el insumo descontado
+							const nombre = `${producto.name} - ${insumoData.name || insumoData.id || producto.idEsencia} ${gramosPorUnidad}g`;
+							const item = {
+								documentId: producto.documentId,
+								id: producto.id,
+								name: nombre,
+								category: producto.category,
+								price: producto.price,
+								idEsencia: producto.idEsencia,
+								esenciaGramos: gramosPorUnidad,
+								cantidad: 1,
+								isAdicional: true
+							};
+							onAgregarAlCarrito && onAgregarAlCarrito(item);
+							return;
+						}
+					} catch (err) {
+						console.error('Error verificando insumo:', err);
+						// en caso de error, continuar y abrir modal para seleccionar esencia
+					}
+				}
+				// Si no es INSUMO o no tiene idEsencia resolvible, abrir modal para elegir esencia
 				setProductoSeleccionado(producto);
 				setShowAdicionalModal(true);
 				setSelectedEsenciaAdicional(null);
@@ -235,24 +272,23 @@ export default function Inventario({ onAgregarAlCarrito }) {
 				cargarEsenciasAdicionales();
 				return;
 			}
+ 
+ 			// Producto sin fórmula: agregar directo
+ 			if (onAgregarAlCarrito) {
+ 				onAgregarAlCarrito({
+ 					documentId: producto.documentId,
+ 					id: producto.id,
+ 					name: producto.name,
+ 					category: producto.category,
+ 					price: producto.price,
+ 					idFormula: producto.idFormula,
+ 					idEsencia: producto.idEsencia,
+ 					cantidad: 1
+ 				});
+ 			}
+ 		}
+ 	};
 
-			// Producto sin fórmula: agregar directo
-			if (onAgregarAlCarrito) {
-				onAgregarAlCarrito({
-					documentId: producto.documentId,
-					id: producto.id,
-					name: producto.name,
-					category: producto.category,
-					price: producto.price,
-					idFormula: producto.idFormula,
-					idEsencia: producto.idEsencia,
-					cantidad: 1
-				});
-			}
-		}
-	};
-
-	// Manejar confirmación del adicional (elige esencia + cantidad total en gramos)
 	const handleConfirmarAdicional = () => {
 		if (!selectedEsenciaAdicional) return;
 		const gramosTotales = Number(cantidadAdicionar) || 0;
