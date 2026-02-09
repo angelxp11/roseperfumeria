@@ -74,6 +74,7 @@
 .categorias-list {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   border-radius: 8px;
   padding-right: 4px;
 }
@@ -560,3 +561,37 @@
     padding: 1px 4px;
   }
 }
+
+.generos-select-container {
+  margin-bottom: 12px;
+}
+
+.generos-select {
+  width: 100%;
+  padding: 10px 12px;
+  background: #000;              /* fondo negro */
+  border: 2px solid var(--color-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  color:var(--color-primary);            /* texto blanco */
+  transition: all 0.3s;
+}
+
+/* opciones del desplegable */
+.generos-select option {
+  background: #1a1a1a;
+  color: #ffffff;
+  padding: 10px;                   /* texto blanco */
+}
+
+/* foco */
+.generos-select:focus {
+  background: #000;
+  border-color: var(--color-primary);
+  outline: none;
+}
+
+
+

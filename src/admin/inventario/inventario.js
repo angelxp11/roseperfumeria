@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, deleteField } from 'firebase/firestore';
 import { db } from '../../server/firebase';
-import { toast } from 'react-toastify';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import * as XLSX from 'xlsx';
 import { FaPlus, FaEdit, FaTrash, FaDownload, FaUpload, FaSearch, FaTimes } from 'react-icons/fa';
 import './inventario.css';
@@ -63,7 +64,7 @@ export default function AdminInventario() {
       setCategorias(Array.from(cats));
     } catch (err) {
       console.error('Error al cargar productos:', err);
-      toast.error('Error al cargar productos');
+      toast.error('Error al cargar productos', { containerId: 'local', position: 'top-right' });
     } finally {
       setLoading(false);
     }
@@ -78,7 +79,6 @@ export default function AdminInventario() {
         id: doc.id,
         ...doc.data()
       }));
-      // Ordenar fórmulas ascendentemente por número
       frms.sort((a, b) => {
         const numA = parseInt(a.id.replace(/\D/g, '')) || 0;
         const numB = parseInt(b.id.replace(/\D/g, '')) || 0;
@@ -87,7 +87,7 @@ export default function AdminInventario() {
       setFormulas(frms);
     } catch (err) {
       console.error('Error al cargar fórmulas:', err);
-      toast.error('Error al cargar fórmulas');
+      toast.error('Error al cargar fórmulas', { containerId: 'local', position: 'top-right' });
     } finally {
       setLoadingFormulas(false);
     }
@@ -103,7 +103,6 @@ export default function AdminInventario() {
       const esen = esenciasSnap.docs.map(d => ({ documentId: d.id, id: d.id, tipo: 'ESENCIA', ...d.data() }));
       const insu = insumosSnap.docs.map(d => ({ documentId: d.id, id: d.id, tipo: 'INSUMOS', ...d.data() }));
       
-      // Excluir esencias destinadas a PRODUCCION
       const esenFiltradas = esen.filter(e => {
         const genero = (e.genero || '').toString().trim().toUpperCase();
         return genero !== 'PRODUCCION';
@@ -113,7 +112,7 @@ export default function AdminInventario() {
       setEsencias(combinadas);
     } catch (err) {
       console.error('Error al cargar esencias:', err);
-      toast.error('Error al cargar esencias');
+      toast.error('Error al cargar esencias', { containerId: 'local', position: 'top-right' });
     } finally {
       setLoadingEsencias(false);
     }
@@ -229,40 +228,35 @@ export default function AdminInventario() {
     
     const tieneFormulas = formData.idFormulas && formData.idFormulas.length > 0;
     
-    // Validación: campos obligatorios
     if (!formData.name || !formData.category) {
-      toast.error('Por favor completa todos los campos requeridos');
+      toast.error('Por favor completa todos los campos requeridos', { containerId: 'local', position: 'top-right' });
       return;
     }
 
     const categoriaUpper = (formData.category || '').toString().trim().toUpperCase();
 
-    // Si tiene fórmulas, requiere esencia y precio (ahora precio es un único campo 'price')
     if (tieneFormulas) {
       if (!formData.idEsencia) {
-        toast.error('Por favor selecciona una esencia');
+        toast.error('Por favor selecciona una esencia', { containerId: 'local', position: 'top-right' });
         return;
       }
       if (formData.price === '' || formData.price === undefined) {
-        toast.error('Por favor ingresa el precio para el producto con fórmula');
+        toast.error('Por favor ingresa el precio para el producto con fórmula', { containerId: 'local', position: 'top-right' });
         return;
       }
       if (isNaN(parseFloat(formData.price))) {
-        toast.error('Por favor ingresa un precio válido');
+        toast.error('Por favor ingresa un precio válido', { containerId: 'local', position: 'top-right' });
         return;
       }
     } else {
-      // Si no tiene fórmulas:
       if (categoriaUpper === 'ADICIONALES') {
-        // Para ADICIONALES no se requiere stock, pero sí idEsencia y gramos por unidad
         if (!formData.idEsencia || !formData.esenciaGramos || formData.price === '' || formData.price === undefined) {
-          toast.error('Para la categoría ADICIONALES selecciona la esencia, los gramos por unidad y el precio');
+          toast.error('Para la categoría ADICIONALES selecciona la esencia, los gramos por unidad y el precio', { containerId: 'local', position: 'top-right' });
           return;
         }
       } else {
-        // Producto sin fórmula normal: requiere stock y precio general
         if (!formData.stock || !formData.price) {
-          toast.error('Por favor completa el stock y precio');
+          toast.error('Por favor completa el stock y precio', { containerId: 'local', position: 'top-right' });
           return;
         }
       }
@@ -272,7 +266,6 @@ export default function AdminInventario() {
       setLoading(true);
       
       if (editingId) {
-        // Editar producto
         const idProducto = formData.id || generarIdIncremental();
         const docRef = doc(db, 'PRODUCTOS', editingId);
         
@@ -283,17 +276,15 @@ export default function AdminInventario() {
         };
 
         if (tieneFormulas) {
-          // Al editar un producto con fórmula guardamos idFormula (singular) y price,
-          // eliminamos campos pluralizados y eliminamos stock
           if (formData.idFormulas.length !== 1) {
-            toast.error('Para editar un producto con fórmula, selecciona exactamente una fórmula.');
+            toast.error('Para editar un producto con fórmula, selecciona exactamente una fórmula.', { containerId: 'local', position: 'top-right' });
             setLoading(false);
             return;
           }
           const formulaId = formData.idFormulas[0];
           const precio = parseFloat(formData.price);
           if (isNaN(precio)) {
-            toast.error('Por favor ingresa un precio válido para el producto con fórmula');
+            toast.error('Por favor ingresa un precio válido para el producto con fórmula', { containerId: 'local', position: 'top-right' });
             setLoading(false);
             return;
           }
@@ -301,21 +292,16 @@ export default function AdminInventario() {
           dataToUpdate.idFormula = formulaId;
           dataToUpdate.price = precio;
           dataToUpdate.idEsencia = formData.idEsencia || deleteField();
-          // eliminar stock para productos con fórmula
           dataToUpdate.stock = deleteField();
-
-          // Eliminar posibles campos plurales que no usamos en cada documento individual
           dataToUpdate.idFormulas = deleteField();
           dataToUpdate.formulasPrices = deleteField();
         } else {
-          // Producto sin fórmula: eliminar campos relacionados con fórmulas si existen
           dataToUpdate.idFormulas = deleteField();
           dataToUpdate.idEsencia = deleteField();
           dataToUpdate.formulasPrices = deleteField();
-          dataToUpdate.idFormula = deleteField(); // eliminar idFormula si existía antes
+          dataToUpdate.idFormula = deleteField();
 
           if (categoriaUpper === 'ADICIONALES') {
-            // No guardar stock, pero guardar idEsencia y gramos por unidad
             dataToUpdate.stock = deleteField();
             dataToUpdate.idEsencia = formData.idEsencia;
             dataToUpdate.esenciaGramos = Number(formData.esenciaGramos);
@@ -323,58 +309,52 @@ export default function AdminInventario() {
           } else {
             dataToUpdate.stock = parseInt(formData.stock);
             dataToUpdate.price = parseFloat(formData.price);
-            // eliminar campos de adicionales si existían
             dataToUpdate.idEsencia = deleteField();
             dataToUpdate.esenciaGramos = deleteField();
           }
         }
 
         await updateDoc(docRef, dataToUpdate);
-        toast.success('Producto actualizado correctamente');
+        toast.success('Producto actualizado correctamente', { containerId: 'local', position: 'top-right' });
       } else {
-        // Crear producto(s)
         if (tieneFormulas) {
-  let ultimoId = obtenerUltimoIdNumerico();
-  let productosCreados = 0;
+          let ultimoId = obtenerUltimoIdNumerico();
+          let productosCreados = 0;
 
-  const precioComun = parseFloat(formData.price);
+          const precioComun = parseFloat(formData.price);
 
-  for (const formulaId of formData.idFormulas) {
-    ultimoId++;
+          for (const formulaId of formData.idFormulas) {
+            ultimoId++;
 
-    const idProducto = ultimoId.toString().padStart(12, '0');
+            const idProducto = ultimoId.toString().padStart(12, '0');
 
-    const numberMatch = formulaId.match(/(\d+)/);
-    const gramos = numberMatch ? numberMatch[1] : '';
+            const numberMatch = formulaId.match(/(\d+)/);
+            const gramos = numberMatch ? numberMatch[1] : '';
 
-    const nombreProducto = gramos
-      ? `${formData.name} ${gramos}GR`
-      : formData.name;
+            const nombreProducto = gramos
+              ? `${formData.name} ${gramos}GR`
+              : formData.name;
 
-    await setDoc(doc(db, 'PRODUCTOS', idProducto), {
-      id: idProducto,
-      name: nombreProducto,
-      category: formData.category,
-      price: precioComun,
-      idFormula: formulaId,
-      idEsencia: formData.idEsencia
-      // no incluir stock para productos con fórmula
-    });
+            await setDoc(doc(db, 'PRODUCTOS', idProducto), {
+              id: idProducto,
+              name: nombreProducto,
+              category: formData.category,
+              price: precioComun,
+              idFormula: formulaId,
+              idEsencia: formData.idEsencia
+            });
 
-    productosCreados++;
-  }
+            productosCreados++;
+          }
 
-  toast.success(`${productosCreados} producto(s) agregado(s) correctamente`);
-}
-else {
-          // Crear un solo producto sin fórmula
+          toast.success(`${productosCreados} producto(s) agregado(s) correctamente`, { containerId: 'local', position: 'top-right' });
+        } else {
           const idProducto = formData.id || generarIdIncremental();
           const docRef = doc(db, 'PRODUCTOS', idProducto);
 
           const categoriaUpper = (formData.category || '').toString().trim().toUpperCase();
 
           if (categoriaUpper === 'ADICIONALES') {
-            // No guardar stock, guardar idEsencia y gramos por unidad
             await setDoc(docRef, {
               id: idProducto,
               name: formData.name,
@@ -383,7 +363,7 @@ else {
               idEsencia: formData.idEsencia,
               esenciaGramos: Number(formData.esenciaGramos)
             });
-            toast.success('Adicional agregado correctamente');
+            toast.success('Adicional agregado correctamente', { containerId: 'local', position: 'top-right' });
           } else {
             await setDoc(docRef, {
               id: idProducto,
@@ -392,7 +372,7 @@ else {
               stock: parseInt(formData.stock),
               price: parseFloat(formData.price)
             });
-            toast.success('Producto agregado correctamente');
+            toast.success('Producto agregado correctamente', { containerId: 'local', position: 'top-right' });
           }
         }
       }
@@ -403,7 +383,7 @@ else {
       cargarProductos();
     } catch (err) {
       console.error('Error:', err);
-      toast.error('Error al guardar el producto');
+      toast.error('Error al guardar el producto', { containerId: 'local', position: 'top-right' });
     } finally {
       setLoading(false);
     }
@@ -431,11 +411,11 @@ else {
     try {
       setLoading(true);
       await deleteDoc(doc(db, 'PRODUCTOS', documentId));
-      toast.success('Producto eliminado correctamente');
+      toast.success('Producto eliminado correctamente', { containerId: 'local', position: 'top-right' });
       cargarProductos();
     } catch (err) {
       console.error('Error:', err);
-      toast.error('Error al eliminar el producto');
+      toast.error('Error al eliminar el producto', { containerId: 'local', position: 'top-right' });
     } finally {
       setLoading(false);
     }
@@ -472,10 +452,10 @@ else {
       ];
 
       XLSX.writeFile(wb, 'productos.xlsx');
-      toast.success('Archivo descargado correctamente');
+      toast.success('Archivo descargado correctamente', { containerId: 'local', position: 'top-right' });
     } catch (err) {
       console.error('Error:', err);
-      toast.error('Error al descargar el archivo');
+      toast.error('Error al descargar el archivo', { containerId: 'local', position: 'top-right' });
     }
   };
 
@@ -530,10 +510,10 @@ else {
       ];
 
       XLSX.writeFile(wb, 'plantilla_productos.xlsx');
-      toast.success('Plantilla descargada correctamente');
+      toast.success('Plantilla descargada correctamente', { containerId: 'local', position: 'top-right' });
     } catch (err) {
       console.error('Error:', err);
-      toast.error('Error al descargar la plantilla');
+      toast.error('Error al descargar la plantilla', { containerId: 'local', position: 'top-right' });
     }
   };
 
@@ -621,12 +601,12 @@ else {
           }
         }
 
-        toast.success(`${importados} productos importados correctamente${saltados ? `, ${saltados} fila(s) omitida(s)` : ''}`);
+        toast.success(`${importados} productos importados correctamente${saltados ? `, ${saltados} fila(s) omitida(s)` : ''}`, { containerId: 'local', position: 'top-right' });
         setShowImportModal(false);
         cargarProductos();
       } catch (err) {
         console.error('Error al importar:', err);
-        toast.error('Error al importar el archivo');
+        toast.error('Error al importar el archivo', { containerId: 'local', position: 'top-right' });
       } finally {
         setLoading(false);
         e.target.value = '';

@@ -25,14 +25,52 @@ export default function Inventario({ onAgregarAlCarrito }) {
 	const [selectedEsenciaAdicional, setSelectedEsenciaAdicional] = useState(null);
 	// Reemplazamos gramosAdicional + cantidadAdicional por una sola cantidad total en gramos
 	const [cantidadAdicionar, setCantidadAdicionar] = useState('');
+	const [esenciasCache, setEsenciasCache] = useState([]);
+	const [generosDisponibles, setGenerosDisponibles] = useState([]);
+	const [generoActivo, setGeneroActivo] = useState('');
+
 
 	useEffect(() => {
 		cargarCategorias();
 	}, []);
+	useEffect(() => {
+	cargarEsenciasCache();
+}, []);
+const cargarEsenciasCache = async () => {
+	try {
+		const ref = collection(db, 'ESENCIA');
+		const snap = await getDocs(ref);
+
+		const data = snap.docs.map(d => ({
+			id: d.id,
+			...d.data()
+		}));
+
+		setEsenciasCache(data);
+
+		// géneros únicos
+		const generos = [
+			...new Set(
+				data
+					.map(e => (e.genero || '').trim())
+					.filter(g => g && g.toUpperCase() !== 'PRODUCCION')
+			)
+		];
+
+		setGenerosDisponibles(generos);
+	} catch (err) {
+		console.error('Error cargando esencias:', err);
+	}
+};
+const categoriaConGenero =
+	['FRAGANCIA', 'CREMA'].includes(
+		(categoriaActiva || '').toUpperCase()
+	);
+
 
 	useEffect(() => {
 		filtrarProductos();
-	}, [busqueda, productosInventario]);
+	}, [busqueda, productosInventario, generoActivo]);
 
 	const cargarCategorias = async () => {
 		try {
@@ -68,18 +106,25 @@ export default function Inventario({ onAgregarAlCarrito }) {
 			const q = query(productosRef, where('category', '==', categoria));
 			const snapshot = await getDocs(q);
 			
-			const prods = snapshot.docs.map(doc => ({
-				documentId: doc.id,
-				id: doc.data().id,
-				name: doc.data().name,
-				category: doc.data().category,
-				stock: doc.data().stock,
-				price: Number(doc.data().price) || 0,
-				idFormula: doc.data().idFormula || null,
-				idEsencia: doc.data().idEsencia || null,
-				tieneFormula: !!doc.data().idFormula,
-				medida: doc.data().idFormula ? extraerMedida(doc.data().idFormula) : ''
-			}));
+			const prods = snapshot.docs.map(doc => {
+				const data = doc.data();
+				// intentar resolver genero desde esenciasCache si existe idEsencia
+				const idEsencia = data.idEsencia || null;
+				const genero = idEsencia ? (esenciasCache.find(e => e.id === idEsencia)?.genero || '') : '';
+				return {
+					documentId: doc.id,
+					id: data.id,
+					name: data.name,
+					category: data.category,
+					stock: data.stock,
+					price: Number(data.price) || 0,
+					idFormula: data.idFormula || null,
+					idEsencia: idEsencia,
+					tieneFormula: !!data.idFormula,
+					medida: data.idFormula ? extraerMedida(data.idFormula) : '',
+					genero
+				};
+			});
 			
 			setProductosInventario(prods);
 			setProductosFiltrados(prods);
@@ -103,7 +148,7 @@ export default function Inventario({ onAgregarAlCarrito }) {
 	};
 
 	const filtrarProductos = () => {
-		if (!busqueda.trim()) {
+		if (!busqueda.trim() && !generoActivo) {
 			setProductosFiltrados(productosInventario);
 			return;
 		}
@@ -111,6 +156,7 @@ export default function Inventario({ onAgregarAlCarrito }) {
 		const busquedaLower = busqueda.toLowerCase().trim();
 		
 		const filtrados = productosInventario.filter(prod => {
+			// filtro por búsqueda
 			const coincideNombre = prod.name.toLowerCase().includes(busquedaLower);
 			
 			let coincideId = false;
@@ -121,7 +167,18 @@ export default function Inventario({ onAgregarAlCarrito }) {
 				coincideId = false;
 			}
 			
-			return coincideNombre || coincideId;
+			let pasaBusqueda = !busquedaLower || coincideNombre || coincideId;
+
+			// filtro por genero si aplica
+			if (categoriaConGenero && generoActivo) {
+				const prodGenero = (prod.genero || '').toString().trim();
+				if (!prodGenero) return false;
+				// comparación case-insensitive
+				const matchGenero = prodGenero.toLowerCase() === generoActivo.toLowerCase();
+				return pasaBusqueda && matchGenero;
+			}
+
+			return pasaBusqueda;
 		});
 
 		setProductosFiltrados(filtrados);
@@ -131,6 +188,12 @@ export default function Inventario({ onAgregarAlCarrito }) {
 		setCategoriaActiva(categoria);
 		setBusqueda('');
 		cargarProductosPorCategoria(categoria);
+		// Si la categoría requiere género, establece el primer género disponible
+		if (categoriaConGenero && generosDisponibles.length > 0) {
+			setGeneroActivo(generosDisponibles[0]);
+		} else {
+			setGeneroActivo('');
+		}
 	};
 
 	const handleLimpiarBusqueda = () => {
@@ -386,6 +449,26 @@ export default function Inventario({ onAgregarAlCarrito }) {
 						))}
 					</select>
 				</div>
+				{categoriaConGenero && (
+					<div className="generos-select-container">
+						<select
+							value={generoActivo}
+							onChange={(e) => {
+								const val = e.target.value || '';
+								setGeneroActivo(val);
+								if (categoriaActiva) cargarProductosPorCategoria(categoriaActiva);
+							}}
+							className="generos-select"
+						>
+							{generosDisponibles.map(gen => (
+								<option key={gen} value={gen}>
+									{gen}
+								</option>
+							))}
+						</select>
+					</div>
+				)}
+
 
 				<div className="search-container-worker">
 					<FaSearch className="search-icon-worker" />
