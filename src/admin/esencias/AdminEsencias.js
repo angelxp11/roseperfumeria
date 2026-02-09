@@ -19,7 +19,8 @@ export default function AdminEsencias() {
     id: '',
     name: '',
     genero: '',
-    stock: ''
+    stock: '',
+    tipo: 'ESENCIA'
   });
 
   useEffect(() => {
@@ -140,18 +141,19 @@ export default function AdminEsencias() {
         });
         toast.success('Elemento actualizado correctamente');
       } else {
-        const docRef = doc(db, 'ESENCIA', idEsencia);
+        const coleccion = formData.tipo === 'INSUMOS' ? 'INSUMOS' : 'ESENCIA';
+        const docRef = doc(db, coleccion, idEsencia);
         await setDoc(docRef, {
           id: idEsencia,
           name: formData.name,
           genero: formData.genero,
           stock: parseFloat(formData.stock)
         });
-        toast.success('Esencia agregada correctamente');
+        toast.success('Elemento agregado correctamente');
       }
       
       setShowModal(false);
-      setFormData({ id: '', name: '', genero: '', stock: '' });
+      setFormData({ id: '', name: '', genero: '', stock: '', tipo: 'ESENCIA' });
       setEditingId(null);
       cargarEsencias();
     } catch (err) {
@@ -184,7 +186,8 @@ export default function AdminEsencias() {
       id: esencia.id,
       name: esencia.name,
       genero: esencia.genero || '',
-      stock: esencia.stock
+      stock: esencia.stock,
+      tipo: esencia.tipo
     });
     setEditingId(esencia.documentId);
     setShowModal(true);
@@ -335,7 +338,7 @@ export default function AdminEsencias() {
 
   const closeModal = () => {
     setShowModal(false);
-    setFormData({ id: '', name: '', genero: '', stock: '' });
+    setFormData({ id: '', name: '', genero: '', stock: '', tipo: 'ESENCIA' });
     setEditingId(null);
   };
 
@@ -451,6 +454,18 @@ export default function AdminEsencias() {
               <button onClick={closeModal} className="close-btn">&times;</button>
             </div>
             <form onSubmit={handleSubmit} className="modal-form">
+              <div className="form-group">
+                <label>Tipo *</label>
+                <select 
+                  name="tipo" 
+                  value={formData.tipo}
+                  onChange={handleInputChange}
+                  required
+                >
+                  <option value="ESENCIA">Esencia</option>
+                  <option value="INSUMOS">Insumo</option>
+                </select>
+              </div>
               <div className="form-group">
                 <label>ID (opcional - se genera automáticamente)</label>
                 <input 
@@ -573,7 +588,7 @@ export default function AdminEsencias() {
                 <div className="import-notes">
                   <h5>📝 Notas importantes:</h5>
                   <ul>
-                    <li><strong>Tipo:</strong> ESENCIA o INSUMOS (obligatorio)</li>
+                    <li><strong>Tipo:</strong> ESENCIA o INSUMO (obligatorio)</li>
                     <li><strong>ID:</strong> Para ESENCIA: 12 dígitos con ceros a la izquierda. Para INSUMOS: nombre del insumo (ALCOHOL, FIJADOR, FEROMONAS). Se genera automáticamente si está vacío.</li>
                     <li><strong>Nombre:</strong> Será convertido automáticamente a MAYÚSCULAS.</li>
                     <li><strong>Género:</strong> Campo obligatorio. Ej: Floral, Herbáceo, Frutal, Cítrico, Insumo, etc.</li>

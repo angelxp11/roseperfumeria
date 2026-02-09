@@ -9,9 +9,6 @@ import AdminHomepage from './admin/homepage/homepage';
 import WorkerHomepage from './worker/homepage/homepage';
 import Carga from './resources/Carga/Carga';
 
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-
 function App() {
   const [user, setUser] = useState(null);
   const [rol, setRol] = useState(null);
@@ -44,6 +41,7 @@ function App() {
       }
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -56,21 +54,10 @@ function App() {
   };
 
   return (
-  <>
-    {renderContent()}
-
-    {/* 🔔 Toast GLOBAL (SIEMPRE MONTADO) */}
-    <ToastContainer
-      position="top-right"
-      autoClose={3000}
-      limit={3}
-      newestOnTop
-      pauseOnHover
-      closeOnClick
-    />
-  </>
-);
-
+    <>
+      {renderContent()}
+    </>
+  );
 }
 
 export default App;

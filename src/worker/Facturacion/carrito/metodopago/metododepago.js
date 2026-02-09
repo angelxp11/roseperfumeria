@@ -69,6 +69,12 @@ export default function MetodoDePago({ total, onClose, onCompletarCompra, items 
 const descontarInsumosPorFormula = async (items = []) => {
    console.log('🟡 Iniciando descuento de insumos');
    console.log('🟡 Items recibidos:', items);
+
+   // Helper: detectar si es crema
+   const esCrema = (item) => {
+     const category = (item.category || '').toString().trim().toUpperCase();
+     return category === 'CREMA';
+   };
  
    for (const item of items) {
      console.log('➡️ Procesando item:', item);
@@ -149,39 +155,77 @@ const descontarInsumosPorFormula = async (items = []) => {
  
       const formula = formulaSnap.data();
       console.log('✅ Fórmula encontrada:', formula);
+
+      // Detectar si es crema o fragancia
+      const isCrema = esCrema(item);
+      console.log(`🏷️ Tipo de producto: ${isCrema ? 'CREMA' : 'FRAGANCIA'}`);
  
-      // 2️⃣ Insumos generales (ALCOHOL, FIJADOR, FEROMONAS)
-      const insumos = [
-        { id: 'ALCOHOL', campo: 'alcohol' },
-        { id: 'FIJADOR', campo: 'fijadorgr' },
-        { id: 'FEROMONAS', campo: 'feromonasgotas' }
-      ];
- 
-      for (const insumo of insumos) {
-        const valor = Number(formula[insumo.campo]) || 0;
-        const total = valor * cantidad;
- 
-        console.log(`🧪 Insumo ${insumo.id}`);
-        console.log(`   Valor por unidad: ${valor}`);
-        console.log(`   Total a descontar: ${total}`);
- 
-        if (total <= 0) {
-          console.warn(`⚠️ No se descuenta ${insumo.id} (total <= 0)`);
-          continue;
+      // 2️⃣ Insumos generales (con lógica diferente para crema vs fragancia)
+      if (isCrema) {
+        // LÓGICA PARA CREMA: Alcohol→CREMA, Fijador→PRESERVANTE, Feromonas→no descontar
+        const insumos = [
+          { id: 'CREMA', campo: 'alcohol' },           // Alcohol va a CREMA
+          { id: 'PRESERVANTE', campo: 'fijadorgr' },   // Fijador va a PRESERVANTE
+          // Feromonas NO se descontan
+        ];
+
+        for (const insumo of insumos) {
+          const valor = Number(formula[insumo.campo]) || 0;
+          const total = valor * cantidad;
+    
+          console.log(`🧪 Insumo ${insumo.id} (CREMA)`);
+          console.log(`   Valor por unidad: ${valor}`);
+          console.log(`   Total a descontar: ${total}`);
+    
+          if (total <= 0) {
+            console.warn(`⚠️ No se descuenta ${insumo.id} (total <= 0)`);
+            continue;
+          }
+    
+          try {
+            const ref = doc(db, 'INSUMOS', insumo.id);
+            await updateDoc(ref, {
+              stock: increment(-total)
+            });
+            console.log(`✅ Descontado ${total} de ${insumo.id}`);
+          } catch (error) {
+            console.error(`🔥 Error descontando ${insumo.id}`, error);
+          }
         }
- 
-        try {
-          const ref = doc(db, 'INSUMOS', insumo.id);
-          await updateDoc(ref, {
-            stock: increment(-total)
-          });
-          console.log(`✅ Descontado ${total} de ${insumo.id}`);
-        } catch (error) {
-          console.error(`🔥 Error descontando ${insumo.id}`, error);
+      } else {
+        // LÓGICA ORIGINAL PARA FRAGANCIA: Alcohol, Fijador, Feromonas
+        const insumos = [
+          { id: 'ALCOHOL', campo: 'alcohol' },
+          { id: 'FIJADOR', campo: 'fijadorgr' },
+          { id: 'FEROMONAS', campo: 'feromonasgotas' }
+        ];
+    
+        for (const insumo of insumos) {
+          const valor = Number(formula[insumo.campo]) || 0;
+          const total = valor * cantidad;
+    
+          console.log(`🧪 Insumo ${insumo.id} (FRAGANCIA)`);
+          console.log(`   Valor por unidad: ${valor}`);
+          console.log(`   Total a descontar: ${total}`);
+    
+          if (total <= 0) {
+            console.warn(`⚠️ No se descuenta ${insumo.id} (total <= 0)`);
+            continue;
+          }
+    
+          try {
+            const ref = doc(db, 'INSUMOS', insumo.id);
+            await updateDoc(ref, {
+              stock: increment(-total)
+            });
+            console.log(`✅ Descontado ${total} de ${insumo.id}`);
+          } catch (error) {
+            console.error(`🔥 Error descontando ${insumo.id}`, error);
+          }
         }
       }
  
-      // 3️⃣ Esencia específica (por idEsencia)
+      // 3️⃣ Esencia específica (igual para crema y fragancia)
       if (item.idEsencia) {
         const esenciaUsada = Number(formula.esenciagr) || 0;
         const totalEsencia = esenciaUsada * cantidad;
@@ -295,7 +339,8 @@ const descontarInsumosPorFormula = async (items = []) => {
           documentId: item.documentId || null,
           idFormula: item.idFormula || null,
           idEsencia: item.idEsencia || null,
-          esenciaGramos: item.esenciaGramos || null // agregado para ADICIONALES
+          esenciaGramos: item.esenciaGramos || null, // agregado para ADICIONALES
+          category: item.category || null // agregado para detectar CREMA al cancelar
         }))
         .filter(p => p.nombre && p.cantidad > 0);
 

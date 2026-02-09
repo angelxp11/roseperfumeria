@@ -269,6 +269,12 @@ export default function Facturas() {
     try {
       if (!Array.isArray(productos) || productos.length === 0) return;
 
+      // Helper: detectar si es crema
+      const esCrema = (prod) => {
+        const category = (prod.category || '').toString().trim().toUpperCase();
+        return category === 'CREMA';
+      };
+
       for (const prod of productos) {
         const cantidad = Number(prod.cantidad) || 0;
         if (cantidad <= 0) continue;
@@ -306,32 +312,60 @@ export default function Facturas() {
             if (formulaSnap.exists()) {
               const formula = formulaSnap.data();
 
-              const insumos = [
-                { id: 'ALCOHOL', campo: 'alcohol' },
-                { id: 'FIJADOR', campo: 'fijadorgr' },
-                { id: 'FEROMONAS', campo: 'feromonasgotas' }
-              ];
+              // Detectar si es crema o fragancia
+              const isCrema = esCrema(prod);
 
-              for (const insumo of insumos) {
-                const valorPorUnidad = Number(formula[insumo.campo]) || 0;
-                const total = valorPorUnidad * cantidad;
-                if (total > 0) {
-                  try {
-                    const ref = doc(db, 'INSUMOS', insumo.id);
-                    await updateDoc(ref, { stock: increment(total) });
-                  } catch (err) {
-                    console.error(`Error restaurando insumo ${insumo.id}:`, err);
+              if (isCrema) {
+                // LÓGICA PARA CREMA: Restaurar a CREMA, PRESERVANTE (sin FEROMONAS)
+                const insumos = [
+                  { id: 'CREMA', campo: 'alcohol' },
+                  { id: 'PRESERVANTE', campo: 'fijadorgr' }
+                ];
+
+                for (const insumo of insumos) {
+                  const valorPorUnidad = Number(formula[insumo.campo]) || 0;
+                  const total = valorPorUnidad * cantidad;
+                  if (total > 0) {
+                    try {
+                      const ref = doc(db, 'INSUMOS', insumo.id);
+                      await updateDoc(ref, { stock: increment(total) });
+                      console.log(`✅ Restaurados ${total} de ${insumo.id} (CREMA)`);
+                    } catch (err) {
+                      console.error(`Error restaurando insumo ${insumo.id}:`, err);
+                    }
+                  }
+                }
+              } else {
+                // LÓGICA PARA FRAGANCIA: Restaurar ALCOHOL, FIJADOR, FEROMONAS
+                const insumos = [
+                  { id: 'ALCOHOL', campo: 'alcohol' },
+                  { id: 'FIJADOR', campo: 'fijadorgr' },
+                  { id: 'FEROMONAS', campo: 'feromonasgotas' }
+                ];
+
+                for (const insumo of insumos) {
+                  const valorPorUnidad = Number(formula[insumo.campo]) || 0;
+                  const total = valorPorUnidad * cantidad;
+                  if (total > 0) {
+                    try {
+                      const ref = doc(db, 'INSUMOS', insumo.id);
+                      await updateDoc(ref, { stock: increment(total) });
+                      console.log(`✅ Restaurados ${total} de ${insumo.id} (FRAGANCIA)`);
+                    } catch (err) {
+                      console.error(`Error restaurando insumo ${insumo.id}:`, err);
+                    }
                   }
                 }
               }
 
-              // Esencia: requiere id de esencia en el producto (si lo tenemos)
+              // Esencia: requiere id de esencia en el producto (igual para crema y fragancia)
               const idEsencia = prod.idEsencia || null;
               const esenciagr = Number(formula.esenciagr) || 0;
               if (idEsencia && esenciagr > 0) {
                 try {
                   const refEs = doc(db, 'ESENCIA', idEsencia);
                   await updateDoc(refEs, { stock: increment(esenciagr * cantidad) });
+                  console.log(`✅ Restaurada esencia ${esenciagr * cantidad}g de ${idEsencia}`);
                 } catch (err) {
                   console.error('Error restaurando ESENCIA:', err);
                 }
@@ -367,6 +401,7 @@ export default function Facturas() {
           try {
             const prodRef = doc(db, 'PRODUCTOS', prod.documentId);
             await updateDoc(prodRef, { stock: increment(cantidad) });
+            console.log(`✅ Restaurado stock de PRODUCTO ${prod.documentId}`);
           } catch (err) {
             console.error('Error restaurando stock de PRODUCTOS:', err);
           }
@@ -375,6 +410,7 @@ export default function Facturas() {
           try {
             const prodRef = doc(db, 'PRODUCTOS', prod.id);
             await updateDoc(prodRef, { stock: increment(cantidad) });
+            console.log(`✅ Restaurado stock de PRODUCTO ${prod.id}`);
           } catch (err) {
             // puede que no sea un id válido; ignorar sin romper el proceso
           }

@@ -117,9 +117,12 @@ class ReportePDF {
 
       if (snap.exists()) {
         Object.values(snap.data()).forEach(f => {
-          f?.productos?.forEach(p => {
-            data.push(p);
-          });
+          // 🔥 NUEVO: Solo incluir productos de facturas NO canceladas
+          if (f?.estado !== 'CANCELADA') {
+            f?.productos?.forEach(p => {
+              data.push(p);
+            });
+          }
         });
       }
       current.setDate(current.getDate() + 1);
