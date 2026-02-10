@@ -33,6 +33,7 @@ export default function Facturas() {
   const [searchFecha, setSearchFecha] = useState('');
   const [searchMetodoPago, setSearchMetodoPago] = useState('');
   const [metodosDisponibles, setMetodosDisponibles] = useState([]);
+  const [facturasCache, setFacturasCache] = useState({});
   const [modalCancelar, setModalCancelar] = useState(false);
   const [facturaCancelar, setFacturaCancelar] = useState(null);
   const [motivoCancelacion, setMotivoCancelacion] = useState('');
@@ -40,9 +41,10 @@ export default function Facturas() {
   const [usuarioActual, setUsuarioActual] = useState('Admin');
 
   useEffect(() => {
-    cargarFacturas();
-    cargarNombreUsuario();
-  }, []);
+  cargarFacturas(fechaHoyId());
+  cargarNombreUsuario();
+}, []);
+
 
   useEffect(() => {
     filtrarFacturas();
@@ -53,56 +55,77 @@ export default function Facturas() {
     setUsuarioActual(nombre);
   };
 
-  const cargarFacturas = async () => {
+  const cargarFacturas = async (fechaId = fechaHoyId()) => {
     try {
       setLoading(true);
-      const snap = await getDocs(collection(db, 'FACTURAS'));
+
+      // Si ya está en caché, usarlo y evitar consulta
+      if (facturasCache[fechaId]) {
+        const cached = facturasCache[fechaId];
+        setFacturas(cached.facturasArray);
+        setFacturasFiltradas(cached.facturasArray);
+        setMetodosDisponibles(cached.metodos);
+        setLoading(false);
+        return;
+      }
+
+      setFacturas([]);
+      setFacturasFiltradas([]);
+
+      const docRef = doc(db, 'FACTURAS', fechaId);
+      const docSnap = await getDoc(docRef);
+
+      if (!docSnap.exists()) {
+        setFacturas([]);
+        setFacturasFiltradas([]);
+        setMetodosDisponibles([]);
+        // Guardar en caché como vacío para evitar reconsultas inmediatas
+        setFacturasCache(prev => ({ ...prev, [fechaId]: { facturasArray: [], metodos: [] } }));
+        return;
+      }
+
+      const data = docSnap.data();
       const facturasArray = [];
       const metodosSet = new Set();
 
-      for (const docSnap of snap.docs) {
-        const fecha = docSnap.id; // dd_mm_yyyy
-        const data = docSnap.data();
+      for (const [facturaId, facturaData] of Object.entries(data)) {
+        facturasArray.push({
+          documentId: fechaId,
+          facturaId,
+          fecha: facturaData.fecha || new Date().toISOString(),
+          ...facturaData
+        });
 
-        // data es { facturaId1: {...}, facturaId2: {...}, ... }
-        for (const [facturaId, facturaData] of Object.entries(data)) {
-          facturasArray.push({
-            documentId: docSnap.id,
-            facturaId,
-            fecha,
-            ...facturaData
-          });
-
-          // Extraer métodos de pago disponibles
-          if (facturaData.metodo_pago) {
-            if (Array.isArray(facturaData.metodo_pago)) {
-              facturaData.metodo_pago.forEach(m => metodosSet.add(m.metodo));
-            } else if (typeof facturaData.metodo_pago === 'object') {
-              metodosSet.add(facturaData.metodo_pago.metodo || 'N/A');
-            } else {
-              metodosSet.add(facturaData.metodo_pago);
-            }
+        if (facturaData.metodo_pago) {
+          if (Array.isArray(facturaData.metodo_pago)) {
+            facturaData.metodo_pago.forEach(m => metodosSet.add(m.metodo));
+          } else if (typeof facturaData.metodo_pago === 'object') {
+            metodosSet.add(facturaData.metodo_pago.metodo);
+          } else {
+            metodosSet.add(facturaData.metodo_pago);
           }
         }
       }
 
-      // Ordena de más nueva a más antigua
-      facturasArray.sort((a, b) => {
-        const dateA = convertirFechaADate(a.fecha);
-        const dateB = convertirFechaADate(b.fecha);
-        return dateB - dateA;
-      });
+      // Ordenar por fecha/hora
+      facturasArray.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
       setFacturas(facturasArray);
       setFacturasFiltradas(facturasArray);
-      setMetodosDisponibles(Array.from(metodosSet).sort());
+      const metodosArr = [...metodosSet].sort();
+      setMetodosDisponibles(metodosArr);
+
+      // Guardar en caché para futuras cargas
+      setFacturasCache(prev => ({ ...prev, [fechaId]: { facturasArray, metodos: metodosArr } }));
+
     } catch (err) {
-      console.error('Error al cargar facturas:', err);
-      toast.error('Error al cargar facturas', { containerId: 'local', position: 'top-right' });
+      console.error(err);
+      toast.error('Error al cargar facturas', { containerId: 'local' });
     } finally {
       setLoading(false);
     }
-  };
+};
+
 
   const convertirFechaADate = (fechaStr) => {
     // fecha formato ISO: "2026-01-24T10:25:44.676Z"
@@ -252,6 +275,37 @@ export default function Facturas() {
     setSearchId('');
     setSearchFecha('');
     setSearchMetodoPago('');
+
+    const hoy = fechaHoyId();
+    const cacheKeys = Object.keys(facturasCache || {});
+
+    // Si hay cache, preferir usarla: mostrar facturas de hoy y, si hay, otras cached
+    if (cacheKeys.length > 0) {
+      // Priorizar hoy si existe, luego añadir el resto
+      const combined = [];
+      if (facturasCache[hoy]?.facturasArray) combined.push(...facturasCache[hoy].facturasArray);
+      cacheKeys.forEach(k => {
+        if (k === hoy) return;
+        const arr = facturasCache[k]?.facturasArray || [];
+        if (arr.length) combined.push(...arr);
+      });
+
+      // Ordenar y aplicar
+      combined.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+      setFacturas(combined);
+      setFacturasFiltradas(combined);
+
+      // Agregar métodos disponibles desde todo el cache
+      const metodosSet = new Set();
+      cacheKeys.forEach(k => {
+        (facturasCache[k]?.metodos || []).forEach(m => metodosSet.add(m));
+      });
+      setMetodosDisponibles([...metodosSet].sort());
+      return;
+    }
+
+    // Si no hay cache, cargar facturas de hoy (fallback)
+    cargarFacturas(hoy);
   };
 
   const abrirModalCancelar = (factura) => {
@@ -465,10 +519,17 @@ export default function Facturas() {
         // Registrar movimiento
         await registrarMovimiento(facturaCancelar.facturaId, motivoCancelacion, montoTotal);
         
-        toast.success(`Factura #${facturaCancelar.facturaId} cancelada. Dinero devuelto: $${formatNumber(montoTotal)}`, { containerId: 'local', position: 'top-right', autoClose: 4000 });
-        setModalCancelar(false);
-        cargarFacturas();
-      }
+        // Invalidar caché para la fecha de la factura cancelada (para forzar recarga)
+        setFacturasCache(prev => {
+          const copy = { ...prev };
+          delete copy[facturaCancelar.documentId];
+          return copy;
+        });
+         
+         toast.success(`Factura #${facturaCancelar.facturaId} cancelada. Dinero devuelto: $${formatNumber(montoTotal)}`, { containerId: 'local', position: 'top-right', autoClose: 4000 });
+         setModalCancelar(false);
+         cargarFacturas();
+       }
     } catch (err) {
       console.error('Error al cancelar factura:', err);
       toast.error('Error al cancelar factura', { containerId: 'local', position: 'top-right', autoClose: 4000 });
@@ -476,6 +537,13 @@ export default function Facturas() {
       setCancelando(false);
     }
   };
+  const dateInputToId = (dateStr) => {
+  // dateStr: yyyy-mm-dd
+  if (!dateStr) return null;
+  const [yyyy, mm, dd] = dateStr.split('-');
+  return `${dd}_${mm}_${yyyy}`;
+};
+
 
   return (
     <div className="rf-facturas-container">
@@ -496,14 +564,24 @@ export default function Facturas() {
           />
         </div>
 
-        <div className="rf-filter-group">
-          <input
-            type="date"
-            value={searchFecha}
-            onChange={(e) => setSearchFecha(e.target.value)}
-            className="rf-filter-input rf-filter-date"
-          />
-        </div>
+        <input
+  type="date"
+  value={searchFecha}
+  onChange={(e) => {
+    const value = e.target.value;
+    setSearchFecha(value);
+
+    if (!value) {
+      // si limpian la fecha → volver a HOY
+      cargarFacturas(fechaHoyId());
+    } else {
+      const fechaId = dateInputToId(value);
+      cargarFacturas(fechaId);
+    }
+  }}
+  className="rf-filter-input rf-filter-date"
+/>
+
 
         <div className="rf-filter-group">
           <select
