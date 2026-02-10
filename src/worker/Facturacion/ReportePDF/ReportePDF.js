@@ -51,17 +51,14 @@ class ReportePDF {
 
   // nuevo: parsear entrada (number o {startDate,endDate})
   static parseRange(range) {
-    if (typeof range === 'number') {
-      return this.getDateRange(range);
-    }
+    // Si ya viene con startDate y endDate normalizados, úsalos directamente
     if (range && range.startDate && range.endDate) {
-      const s = new Date(range.startDate);
-      const e = new Date(range.endDate);
-      s.setHours(0,0,0,0);
-      e.setHours(23,59,59,999);
-      return { startDate: s, endDate: e };
+      return {
+        startDate: range.startDate,
+        endDate: range.endDate,
+      };
     }
-    // por defecto: hoy
+    // fallback: hoy
     return this.getDateRange(1);
   }
 
@@ -204,21 +201,108 @@ class ReportePDF {
     return snap.exists() ? snap.data() : null;
   }
 
-  static async getTotalesMetodos(startDate, endDate) {
-    const totales = { EFECTIVO: 0, NEQUI: 0, BANCOLOMBIA: 0 };
+  static async getTotalesMetodos(startDate, endDate, isSingleDay = false) {
+    const totales = { 
+      EFECTIVO: { contado: 0, esperado: 0 }, 
+      NEQUI: { contado: 0, esperado: 0 }, 
+      BANCOLOMBIA: { contado: 0, esperado: 0 } 
+    };
+
+    // Si es un reporte de un día, buscar en movimientos el cierre de caja
+    if (isSingleDay) {
+      const movimientos = await this.getMovimientos(startDate, endDate);
+      const cierreCaja = movimientos.find(m => 
+        m.descripcion && m.descripcion.includes('cerró la caja')
+      );
+      if (cierreCaja) {
+        return this.parseCierreCaja(cierreCaja.descripcion);
+      }
+    }
+
+    // Fallback: usar datos de CAJAS (para rangos multiday o si no hay cierre)
     const current = new Date(startDate);
     current.setHours(0, 0, 0, 0);
 
     while (current <= endDate) {
-      const cajaData = await this.getCajasData(current);
-      if (cajaData?.APERTURA) {
-        totales.EFECTIVO += Number(cajaData.APERTURA.EFECTIVO || 0);
-        totales.NEQUI += Number(cajaData.APERTURA.NEQUI || 0);
-        totales.BANCOLOMBIA += Number(cajaData.APERTURA.BANCOLOMBIA || 0);
+      // Buscar cierre de caja para este día
+      const movimientos = await this.getMovimientos(current, current);
+      const cierreCaja = movimientos.find(m => 
+        m.descripcion && m.descripcion.includes('cerró la caja')
+      );
+
+      if (cierreCaja) {
+        // Si existe cierre, usar sus valores
+        const cierreData = this.parseCierreCaja(cierreCaja.descripcion);
+        totales.EFECTIVO.esperado += cierreData.EFECTIVO.esperado;
+        totales.EFECTIVO.contado += cierreData.EFECTIVO.contado;
+        totales.NEQUI.esperado += cierreData.NEQUI.esperado;
+        totales.NEQUI.contado += cierreData.NEQUI.contado;
+        totales.BANCOLOMBIA.esperado += cierreData.BANCOLOMBIA.esperado;
+        totales.BANCOLOMBIA.contado += cierreData.BANCOLOMBIA.contado;
+      } else {
+        // Fallback: apertura + ventas del día
+        const cajaData = await this.getCajasData(current);
+        
+        if (cajaData?.APERTURA) {
+          totales.EFECTIVO.esperado += Number(cajaData.APERTURA.EFECTIVO || 0);
+          totales.NEQUI.esperado += Number(cajaData.APERTURA.NEQUI || 0);
+          totales.BANCOLOMBIA.esperado += Number(cajaData.APERTURA.BANCOLOMBIA || 0);
+        }
+
+        // Sumar ventas del día
+        const facturas = await this.getFacturas(current, current);
+        if (facturas.length > 0) {
+          const facturasPorMetodo = {};
+          facturas.forEach(f => {
+            const metodo = f.metodo_pago || 'EFECTIVO';
+            if (!facturasPorMetodo[metodo]) facturasPorMetodo[metodo] = 0;
+            facturasPorMetodo[metodo] += f.precio_unitario * f.cantidad;
+          });
+          totales.EFECTIVO.esperado += Number(facturasPorMetodo.EFECTIVO || 0);
+          totales.NEQUI.esperado += Number(facturasPorMetodo.NEQUI || 0);
+          totales.BANCOLOMBIA.esperado += Number(facturasPorMetodo.BANCOLOMBIA || 0);
+        }
       }
+
       current.setDate(current.getDate() + 1);
     }
     return totales;
+  }
+
+  static parseCierreCaja(descripcion) {
+    // Extrae los datos del cierre de caja de la descripción
+    const resultado = {
+      EFECTIVO: { esperado: 0, contado: 0 },
+      NEQUI: { esperado: 0, contado: 0 },
+      BANCOLOMBIA: { esperado: 0, contado: 0 }
+    };
+
+    // Buscar "Total encontrado: $X"
+    const totalMatch = descripcion.match(/Total encontrado:\s+\$([0-9.,]+)/);
+    if (totalMatch) {
+      const total = totalMatch[1].replace(/\./g, '').replace(/,/g, '');
+      // Este es el total contado general
+    }
+
+    // Buscar cada método: "METODO: esperado $X, encontrado $Y"
+    const metodos = ['EFECTIVO', 'NEQUI', 'BANCOLOMBIA'];
+    metodos.forEach(metodo => {
+      const regex = new RegExp(
+        `${metodo}:\\s+esperado\\s+\\$([0-9.,]+),?\\s+encontrado\\s+\\$([0-9.,]+)`,
+        'i'
+      );
+      const match = descripcion.match(regex);
+      if (match) {
+        const esperado = match[1].replace(/\./g, '').replace(/,/g, '');
+        const contado = match[2].replace(/\./g, '').replace(/,/g, '');
+        resultado[metodo] = {
+          esperado: Number(esperado),
+          contado: Number(contado)
+        };
+      }
+    });
+
+    return resultado;
   }
 
   static async getDenominaciones(date) {
@@ -234,9 +318,8 @@ class ReportePDF {
   static async generateReport(range) {
 
     const { startDate, endDate } = this.parseRange(range);
-    const rangeLabel = (typeof range === 'number')
-      ? this.getRangeLabel(range)
-      : this.getRangeLabelFromDates(startDate, endDate);
+    const rangeLabel = this.getRangeLabelFromDates(startDate, endDate);
+    const isSingleDay = this.formatDate(startDate) === this.formatDate(endDate);
 
     const movimientos = await this.getMovimientos(startDate, endDate);
     let productos = await this.getFacturas(startDate, endDate);
@@ -405,8 +488,9 @@ class ReportePDF {
       y += 10;
     }
     /* ===== TOTALES POR MÉTODO ===== */
-    const totalesMetodos = await this.getTotalesMetodos(startDate, endDate);
-    if (Object.values(totalesMetodos).some(v => v > 0)) {
+    const totalesMetodos = await this.getTotalesMetodos(startDate, endDate, isSingleDay);
+
+    if (Object.values(totalesMetodos).some(v => v.contado > 0 || v.esperado > 0)) {
       if (y > 230) {
         pdf.addPage();
         y = 20;
@@ -424,9 +508,18 @@ class ReportePDF {
       pdf.setFillColor(230);
       pdf.rect(15, y - 5, 180, 7, 'F');
 
-      const colsTotales = [15, 100];
-      pdf.text('Método', colsTotales[0], y);
-      pdf.text('Total', colsTotales[1], y);
+      let colsTotales;
+      if (isSingleDay) {
+        colsTotales = [15, 75, 130, 165];
+        pdf.text('Método', colsTotales[0], y);
+        pdf.text('Total Esperado', colsTotales[1], y);
+        pdf.text('Total Contado', colsTotales[2], y);
+        pdf.text('Diferencia', colsTotales[3], y);
+      } else {
+        colsTotales = [15, 75];
+        pdf.text('Método', colsTotales[0], y);
+        pdf.text('Total Esperado', colsTotales[1], y);
+      }
       y += 3;
 
       pdf.setFont(undefined, 'normal');
@@ -443,8 +536,17 @@ class ReportePDF {
         pdf.setDrawColor(200);
         pdf.rect(15, y, 180, 7);
 
+        const contado = totalesMetodos[m]?.contado || 0;
+        const esperado = totalesMetodos[m]?.esperado || 0;
+        const diferencia = esperado - contado;
+
         pdf.text(m, colsTotales[0] + 2, y + 5);
-        pdf.text(this.formatMoney(totalesMetodos[m] || 0), colsTotales[1] + 2, y + 5);
+        pdf.text(this.formatMoney(esperado), colsTotales[1] + 2, y + 5);
+        
+        if (isSingleDay) {
+          pdf.text(this.formatMoney(contado), colsTotales[2] + 2, y + 5);
+          pdf.text(this.formatMoney(diferencia), colsTotales[3] + 2, y + 5);
+        }
 
         y += 7;
       });
@@ -454,13 +556,7 @@ class ReportePDF {
 
     /* ===== DENOMINACIONES ===== */
     /* ===== DENOMINACIONES (SOLO HOY) ===== */
-const isSingleDay =
-  this.formatDate(startDate) === this.formatDate(endDate);
-
-const isToday =
-  this.formatDate(endDate) === this.formatDate(new Date());
-
-if (isSingleDay && isToday) {
+if (isSingleDay) {
   const denominaciones = await this.getDenominaciones(endDate);
 
   if (Object.keys(denominaciones).length > 0) {
@@ -508,7 +604,6 @@ if (isSingleDay && isToday) {
     y += 5;
   }
 }
-
 
     if (movimientos.length) {
       if (y > 240) {

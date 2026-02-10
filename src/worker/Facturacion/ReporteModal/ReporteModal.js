@@ -4,24 +4,32 @@ import ReportePDF from '../ReportePDF/ReportePDF';
 import './ReporteModal.css';
 
 export default function ReporteModal({ onClose }) {
-  const [selectedRange, setSelectedRange] = useState(null);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [generatingReport, setGeneratingReport] = useState(false);
 
-  const ranges = [
-    { value: 1, label: 'Hoy' },
-    { value: 7, label: 'Últimos 7 días' },
-    { value: 15, label: 'Últimos 15 días' },
-    { value: 30, label: 'Últimos 30 días' },
-    { value: 90, label: 'Últimos 90 días' },
-    { value: 180, label: 'Últimos 180 días' },
-    { value: 365, label: 'Últimos 365 días' },
-  ];
-
   const handleGenerateReport = async () => {
+    if (!startDate) {
+      alert('Debes seleccionar una fecha inicial');
+      return;
+    }
+
     setGeneratingReport(true);
     try {
-      // El PDF ahora es vacío, el rango es opcional
-      await ReportePDF.generateReport(selectedRange);
+      // 🔒 PARSEAR CORRECTAMENTE - El input devuelve YYYY-MM-DD sin zona horaria
+      const [yearStart, monthStart, dayStart] = startDate.split('-');
+      const start = new Date(Number(yearStart), Number(monthStart) - 1, Number(dayStart));
+      start.setHours(0, 0, 0, 0);
+
+      const [yearEnd, monthEnd, dayEnd] = (endDate || startDate).split('-');
+      const end = new Date(Number(yearEnd), Number(monthEnd) - 1, Number(dayEnd));
+      end.setHours(23, 59, 59, 999);
+
+      const range = {
+        startDate: start,
+        endDate: end,
+      };
+      await ReportePDF.generateReport(range);
     } catch (error) {
       console.error('Error generando reporte:', error);
     } finally {
@@ -47,20 +55,33 @@ export default function ReporteModal({ onClose }) {
         <div className="reporte-modal-content">
           <p>Selecciona el período para el informe:</p>
 
-          <div className="range-buttons">
-            {ranges.map((range) => (
-              <button
-                key={range.value}
-                className={`range-btn ${
-                  selectedRange === range.value ? 'active' : ''
-                }`}
-                onClick={() => setSelectedRange(range.value)}
+          <div className="date-inputs">
+            <div className="date-group">
+              <label>Fecha Inicial (Requerida)</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
                 disabled={generatingReport}
-              >
-                {range.label}
-              </button>
-            ))}
+              />
+            </div>
+
+            <div className="date-group">
+              <label>Fecha Final (Opcional)</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                disabled={generatingReport}
+                min={startDate}
+              />
+            </div>
           </div>
+
+          <p style={{ fontSize: '0.85em', color: '#666', marginTop: '10px' }}>
+            💡 Si dejas la fecha final vacía, se genera el informe solo para la fecha inicial
+            (con denominaciones de efectivo).
+          </p>
         </div>
 
         <div className="reporte-modal-footer">
