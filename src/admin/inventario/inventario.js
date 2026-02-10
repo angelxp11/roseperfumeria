@@ -1,11 +1,16 @@
-import { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, deleteField } from 'firebase/firestore';
+import { useState, useEffect, useRef } from 'react';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, deleteField, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../../server/firebase';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import * as XLSX from 'xlsx';
 import { FaPlus, FaEdit, FaTrash, FaDownload, FaUpload, FaSearch, FaTimes } from 'react-icons/fa';
 import './inventario.css';
+
+const CACHE_KEY = 'productos_cache';
+const CACHE_TIMESTAMP_KEY = 'productos_cache_timestamp';
+const CACHE_VERSION_KEY = 'productos_cache_version';
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutos en ms
 
 export default function AdminInventario() {
   const [productos, setProductos] = useState([]);
@@ -23,8 +28,8 @@ export default function AdminInventario() {
     price: '',
     idFormulas: [],
     idEsencia: '',
-    formulasPrices: {}, // NUEVO: guardar precios por fórmula
-    esenciaGramos: '' // NUEVO: gramos por unidad para ADICIONALES
+    formulasPrices: {},
+    esenciaGramos: ''
   });
   const [categorias, setCategorias] = useState([]);
   const [formulas, setFormulas] = useState([]);
@@ -33,40 +38,172 @@ export default function AdminInventario() {
   const [loadingFormulas, setLoadingFormulas] = useState(false);
   const [loadingEsencias, setLoadingEsencias] = useState(false);
 
+  // Refs para listener y debounce
+  const unsubscribeRef = useRef(null);
+  const debounceTimerRef = useRef(null);
+  const isMountedRef = useRef(true);
+  const cacheInitializedRef = useRef(false);
+
   useEffect(() => {
-    cargarProductos();
+    isMountedRef.current = true;
+    inicializarDatos();
+    
+    return () => {
+      isMountedRef.current = false;
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
-    filtrarProductos();
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      filtrarProductos();
+    }, 300);
   }, [busqueda, productos]);
 
-  // Cargar esencias automáticamente al abrir el modal si aún no están
   useEffect(() => {
     if (showModal && esencias.length === 0) {
       cargarEsencias();
     }
   }, [showModal]);
 
-  const cargarProductos = async () => {
+  // ====== CACHÉ FUNCTIONS ======
+  const obtenerProductosDelCache = () => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      const timestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+      
+      if (!cached || !timestamp) return null;
+      
+      const ahora = Date.now();
+      const tiempoTranscurrido = ahora - parseInt(timestamp);
+      
+      if (tiempoTranscurrido > CACHE_DURATION) {
+        localStorage.removeItem(CACHE_KEY);
+        localStorage.removeItem(CACHE_TIMESTAMP_KEY);
+        return null;
+      }
+      
+      return JSON.parse(cached);
+    } catch (err) {
+      console.error('Error al leer caché:', err);
+      return null;
+    }
+  };
+
+  const guardarProductosEnCache = (prods) => {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(prods));
+      localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+    } catch (err) {
+      console.error('Error al guardar caché:', err);
+    }
+  };
+
+  const actualizarProductoEnCache = (productoActualizado) => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (!cached) return;
+      
+      const prods = JSON.parse(cached);
+      const indice = prods.findIndex(p => p.documentId === productoActualizado.documentId);
+      
+      if (indice !== -1) {
+        prods[indice] = productoActualizado;
+        guardarProductosEnCache(prods);
+      }
+    } catch (err) {
+      console.error('Error al actualizar caché:', err);
+    }
+  };
+
+  const agregarProductoAlCache = (productoNuevo) => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      const prods = cached ? JSON.parse(cached) : [];
+      prods.push(productoNuevo);
+      guardarProductosEnCache(prods);
+    } catch (err) {
+      console.error('Error al agregar a caché:', err);
+    }
+  };
+
+  const eliminarProductoDelCache = (documentId) => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (!cached) return;
+      
+      const prods = JSON.parse(cached);
+      const filtrados = prods.filter(p => p.documentId !== documentId);
+      guardarProductosEnCache(filtrados);
+    } catch (err) {
+      console.error('Error al eliminar de caché:', err);
+    }
+  };
+
+  // ====== INITIALIZE ======
+  const inicializarDatos = async () => {
     try {
       setLoading(true);
-      const productosRef = collection(db, 'PRODUCTOS');
-      const snapshot = await getDocs(productosRef);
-      const prods = snapshot.docs.map(doc => ({
-        documentId: doc.id,
-        ...doc.data()
-      }));
-      setProductos(prods);
-      setProductosFiltrados(prods);
       
-      const cats = new Set(prods.map(p => p.category).filter(Boolean));
-      setCategorias(Array.from(cats));
+      // Intentar obtener del caché primero
+      const productosEnCache = obtenerProductosDelCache();
+      
+      if (productosEnCache && productosEnCache.length > 0) {
+        // Usar caché mientras se sincroniza con servidor
+        if (isMountedRef.current) {
+          setProductos(productosEnCache);
+          setProductosFiltrados(productosEnCache);
+          const cats = new Set(productosEnCache.map(p => p.category).filter(Boolean));
+          setCategorias(Array.from(cats));
+        }
+      }
+      
+      // Configurar listener en tiempo real (sin descargar todo nuevamente)
+      configurarListenerTiempoReal();
+      
     } catch (err) {
-      console.error('Error al cargar productos:', err);
+      console.error('Error al inicializar:', err);
       toast.error('Error al cargar productos', { containerId: 'local', position: 'top-right' });
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  // ====== LISTENER TIEMPO REAL ======
+  const configurarListenerTiempoReal = () => {
+    try {
+      const productosRef = collection(db, 'PRODUCTOS');
+      
+      unsubscribeRef.current = onSnapshot(productosRef, (snapshot) => {
+        if (!isMountedRef.current) return;
+        
+        const prods = snapshot.docs.map(doc => ({
+          documentId: doc.id,
+          ...doc.data()
+        }));
+        
+        setProductos(prods);
+        setProductosFiltrados(prods);
+        guardarProductosEnCache(prods);
+        
+        const cats = new Set(prods.map(p => p.category).filter(Boolean));
+        setCategorias(Array.from(cats));
+        
+      }, (error) => {
+        console.error('Error en listener:', error);
+      });
+    } catch (err) {
+      console.error('Error al configurar listener:', err);
     }
   };
 
@@ -84,12 +221,16 @@ export default function AdminInventario() {
         const numB = parseInt(b.id.replace(/\D/g, '')) || 0;
         return numA - numB;
       });
-      setFormulas(frms);
+      if (isMountedRef.current) {
+        setFormulas(frms);
+      }
     } catch (err) {
       console.error('Error al cargar fórmulas:', err);
       toast.error('Error al cargar fórmulas', { containerId: 'local', position: 'top-right' });
     } finally {
-      setLoadingFormulas(false);
+      if (isMountedRef.current) {
+        setLoadingFormulas(false);
+      }
     }
   };
 
@@ -109,18 +250,21 @@ export default function AdminInventario() {
       });
       
       const combinadas = [...esenFiltradas, ...insu];
-      setEsencias(combinadas);
+      if (isMountedRef.current) {
+        setEsencias(combinadas);
+      }
     } catch (err) {
       console.error('Error al cargar esencias:', err);
       toast.error('Error al cargar esencias', { containerId: 'local', position: 'top-right' });
     } finally {
-      setLoadingEsencias(false);
+      if (isMountedRef.current) {
+        setLoadingEsencias(false);
+      }
     }
   };
 
   const handleToggleFormulas = async () => {
     if (!showFormulas) {
-      // Si no está mostrando, cargar fórmulas y esencias
       if (formulas.length === 0) {
         await cargarFormulas();
       }
@@ -137,7 +281,6 @@ export default function AdminInventario() {
         ? prev.idFormulas.filter(id => id !== formulaId)
         : [...prev.idFormulas, formulaId];
       
-      // Si se deselecciona, eliminar el precio asociado
       const nuevosPrecios = { ...prev.formulasPrices };
       if (!nuevasFormulas.includes(formulaId)) {
         delete nuevosPrecios[formulaId];
@@ -162,11 +305,9 @@ export default function AdminInventario() {
   };
 
   const normalizarIdBusqueda = (id) => {
-    // Si es un número, lo convierte a string con 12 dígitos
     if (!isNaN(id)) {
       return parseInt(id).toString().padStart(12, '0');
     }
-    // Si ya es string con formato, lo retorna
     return id.padStart(12, 0);
   };
 
@@ -266,6 +407,7 @@ export default function AdminInventario() {
       setLoading(true);
       
       if (editingId) {
+        // EDICIÓN: actualizar solo el documento específico
         const idProducto = formData.id || generarIdIncremental();
         const docRef = doc(db, 'PRODUCTOS', editingId);
         
@@ -315,77 +457,83 @@ export default function AdminInventario() {
         }
 
         await updateDoc(docRef, dataToUpdate);
+        
+        // Actualizar en caché y estado sin hacer consulta adicional
+        const productoActualizado = {
+          documentId: editingId,
+          ...dataToUpdate
+        };
+        actualizarProductoEnCache(productoActualizado);
+        setProductos(prev => prev.map(p => p.documentId === editingId ? productoActualizado : p));
+        
         toast.success('Producto actualizado correctamente', { containerId: 'local', position: 'top-right' });
       } else {
+        // CREACIÓN: agregar productos nuevos
         if (tieneFormulas) {
           let ultimoId = obtenerUltimoIdNumerico();
           let productosCreados = 0;
-
           const precioComun = parseFloat(formData.price);
 
           for (const formulaId of formData.idFormulas) {
             ultimoId++;
-
             const idProducto = ultimoId.toString().padStart(12, '0');
-
             const numberMatch = formulaId.match(/(\d+)/);
             const gramos = numberMatch ? numberMatch[1] : '';
-
             const nombreProducto = gramos
               ? `${formData.name} ${gramos}GR`
               : formData.name;
 
-            await setDoc(doc(db, 'PRODUCTOS', idProducto), {
+            const productoNuevo = {
               id: idProducto,
               name: nombreProducto,
               category: formData.category,
               price: precioComun,
               idFormula: formulaId,
               idEsencia: formData.idEsencia
-            });
+            };
 
+            await setDoc(doc(db, 'PRODUCTOS', idProducto), productoNuevo);
+            agregarProductoAlCache({ documentId: idProducto, ...productoNuevo });
             productosCreados++;
           }
 
           toast.success(`${productosCreados} producto(s) agregado(s) correctamente`, { containerId: 'local', position: 'top-right' });
         } else {
           const idProducto = formData.id || generarIdIncremental();
-          const docRef = doc(db, 'PRODUCTOS', idProducto);
-
-          const categoriaUpper = (formData.category || '').toString().trim().toUpperCase();
+          const productoNuevo = {
+            id: idProducto,
+            name: formData.name,
+            category: formData.category
+          };
 
           if (categoriaUpper === 'ADICIONALES') {
-            await setDoc(docRef, {
-              id: idProducto,
-              name: formData.name,
-              category: formData.category,
-              price: parseFloat(formData.price),
-              idEsencia: formData.idEsencia,
-              esenciaGramos: Number(formData.esenciaGramos)
-            });
-            toast.success('Adicional agregado correctamente', { containerId: 'local', position: 'top-right' });
+            productoNuevo.price = parseFloat(formData.price);
+            productoNuevo.idEsencia = formData.idEsencia;
+            productoNuevo.esenciaGramos = Number(formData.esenciaGramos);
           } else {
-            await setDoc(docRef, {
-              id: idProducto,
-              name: formData.name,
-              category: formData.category,
-              stock: parseInt(formData.stock),
-              price: parseFloat(formData.price)
-            });
-            toast.success('Producto agregado correctamente', { containerId: 'local', position: 'top-right' });
+            productoNuevo.stock = parseInt(formData.stock);
+            productoNuevo.price = parseFloat(formData.price);
           }
+
+          await setDoc(doc(db, 'PRODUCTOS', idProducto), productoNuevo);
+          agregarProductoAlCache({ documentId: idProducto, ...productoNuevo });
+          
+          const tipoMsg = categoriaUpper === 'ADICIONALES' ? 'Adicional' : 'Producto';
+          toast.success(`${tipoMsg} agregado correctamente`, { containerId: 'local', position: 'top-right' });
         }
       }
       
       setShowModal(false);
       setFormData({ id: '', name: '', category: '', stock: '', price: '', idFormulas: [], idEsencia: '', formulasPrices: {}, esenciaGramos: '' });
       setEditingId(null);
-      cargarProductos();
+      // NO llamar a cargarProductos() - el listener ya actualiza automáticamente
     } catch (err) {
       console.error('Error:', err);
       toast.error('Error al guardar el producto', { containerId: 'local', position: 'top-right' });
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -398,7 +546,7 @@ export default function AdminInventario() {
       price: producto.price,
       idFormulas: producto.idFormula ? [producto.idFormula] : [],
       idEsencia: producto.idEsencia || '',
-      formulasPrices: {}, // ya no usamos precios por fórmula
+      formulasPrices: {},
       esenciaGramos: producto.esenciaGramos || ''
     });
     setEditingId(producto.documentId);
@@ -411,13 +559,19 @@ export default function AdminInventario() {
     try {
       setLoading(true);
       await deleteDoc(doc(db, 'PRODUCTOS', documentId));
+      
+      // Actualizar caché y estado inmediatamente
+      eliminarProductoDelCache(documentId);
+      setProductos(prev => prev.filter(p => p.documentId !== documentId));
+      
       toast.success('Producto eliminado correctamente', { containerId: 'local', position: 'top-right' });
-      cargarProductos();
     } catch (err) {
       console.error('Error:', err);
       toast.error('Error al eliminar el producto', { containerId: 'local', position: 'top-right' });
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -427,9 +581,7 @@ export default function AdminInventario() {
         ID: p.id,
         Nombre: p.name,
         Categoría: p.category,
-        // stock sólo para productos sin fórmula
         Stock: p.idFormula ? '' : p.stock,
-        // Precio general (ahora siempre en "Precio", inclusive para fórmulas)
         Precio: p.price,
         'ID Fórmula': p.idFormula || '',
         'ID Esencia': p.idEsencia || '',
@@ -439,7 +591,6 @@ export default function AdminInventario() {
       const ws = XLSX.utils.json_to_sheet(datos);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Productos');
-      
       ws['!cols'] = [
         { wch: 15 },
         { wch: 25 },
@@ -450,7 +601,6 @@ export default function AdminInventario() {
         { wch: 15 },
         { wch: 12 }
       ];
-
       XLSX.writeFile(wb, 'productos.xlsx');
       toast.success('Archivo descargado correctamente', { containerId: 'local', position: 'top-right' });
     } catch (err) {
@@ -466,8 +616,8 @@ export default function AdminInventario() {
           ID: '000000000001',
           Nombre: 'EJEMPLO PERFUME',
           Categoría: 'PERFUME',
-          Stock: '', // Para fórmulas: dejar vacío (no se requiere stock)
-          Precio: 120000, // precio para fórmula en 'Precio'
+          Stock: '',
+          Precio: 120000,
           'ID Fórmula': 'FORMULA001',
           'ID Esencia': 'ESENCIA001',
           'Esencia Gramos': ''
@@ -497,7 +647,6 @@ export default function AdminInventario() {
       const ws = XLSX.utils.json_to_sheet(datosFormato);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Productos');
-      
       ws['!cols'] = [
         { wch: 15 },
         { wch: 25 },
@@ -508,7 +657,6 @@ export default function AdminInventario() {
         { wch: 15 },
         { wch: 12 }
       ];
-
       XLSX.writeFile(wb, 'plantilla_productos.xlsx');
       toast.success('Plantilla descargada correctamente', { containerId: 'local', position: 'top-right' });
     } catch (err) {
@@ -532,11 +680,11 @@ export default function AdminInventario() {
         setLoading(true);
         let importados = 0;
         let saltados = 0;
+        const productosImportados = [];
         
         for (const row of jsonData) {
-          // Campos básicos
           if (!row.Nombre || !row.Categoría) {
-            saltados++; // fila inválida
+            saltados++;
             continue;
           }
 
@@ -547,63 +695,67 @@ export default function AdminInventario() {
           const idEsenciaRaw = row['ID Esencia'] !== undefined ? row['ID Esencia'] : '';
           const gramosRaw = row['Esencia Gramos'] !== undefined ? row['Esencia Gramos'] : '';
 
+          const idProducto = row.ID ? row.ID.toString().padStart(12, '0') : generarIdIncremental();
+
           if (tieneFormula) {
-            // Para productos con fórmula: se requiere precio en "Precio"
             if (precioRaw === '' || precioRaw === undefined) {
               saltados++;
-              continue; // sin precio -> saltar
+              continue;
             }
-            const idProducto = row.ID ? row.ID.toString().padStart(12, '0') : generarIdIncremental();
             const docRef = doc(db, 'PRODUCTOS', idProducto);
-            // NO guardar stock para productos con fórmula
-            await setDoc(docRef, {
+            const productoNuevo = {
               id: idProducto,
               name: row.Nombre,
               category: row.Categoría,
               price: parseFloat(precioRaw),
               idFormula: row['ID Fórmula'],
               idEsencia: idEsenciaRaw || deleteField()
-            });
+            };
+            await setDoc(docRef, productoNuevo);
+            productosImportados.push({ documentId: idProducto, ...productoNuevo });
             importados++;
           } else if (categoriaUpper === 'ADICIONALES') {
-            // ADICIONALES: requiere ID Esencia, Esencia Gramos y Precio (no stock)
             if (!idEsenciaRaw || gramosRaw === undefined || gramosRaw === '' || precioRaw === '' || precioRaw === undefined) {
               saltados++;
               continue;
             }
-            const idProducto = row.ID ? row.ID.toString().padStart(12, '0') : generarIdIncremental();
             const docRef = doc(db, 'PRODUCTOS', idProducto);
-            await setDoc(docRef, {
+            const productoNuevo = {
               id: idProducto,
               name: row.Nombre,
               category: row.Categoría,
               price: parseFloat(precioRaw),
               idEsencia: idEsenciaRaw,
               esenciaGramos: Number(gramosRaw)
-            });
+            };
+            await setDoc(docRef, productoNuevo);
+            productosImportados.push({ documentId: idProducto, ...productoNuevo });
             importados++;
           } else {
-            // Producto sin fórmula: requiere stock y precio
             if (precioRaw === '' || precioRaw === undefined || stockRaw === undefined || stockRaw === '') {
               saltados++;
               continue;
             }
-            const idProducto = row.ID ? row.ID.toString().padStart(12, '0') : generarIdIncremental();
             const docRef = doc(db, 'PRODUCTOS', idProducto);
-            await setDoc(docRef, {
+            const productoNuevo = {
               id: idProducto,
               name: row.Nombre,
               category: row.Categoría,
               stock: parseInt(stockRaw),
               price: parseFloat(precioRaw)
-            });
+            };
+            await setDoc(docRef, productoNuevo);
+            productosImportados.push({ documentId: idProducto, ...productoNuevo });
             importados++;
           }
         }
 
+        // Actualizar caché con los nuevos productos
+        productosImportados.forEach(p => agregarProductoAlCache(p));
+
         toast.success(`${importados} productos importados correctamente${saltados ? `, ${saltados} fila(s) omitida(s)` : ''}`, { containerId: 'local', position: 'top-right' });
         setShowImportModal(false);
-        cargarProductos();
+        // NO llamar a cargarProductos() - el listener ya actualiza automáticamente
       } catch (err) {
         console.error('Error al importar:', err);
         toast.error('Error al importar el archivo', { containerId: 'local', position: 'top-right' });
@@ -633,12 +785,11 @@ export default function AdminInventario() {
   const tieneFormulas = formData.idFormulas && formData.idFormulas.length > 0;
 
   const obtenerUltimoIdNumerico = () => {
-  const idsNumericos = productos
-    .map(p => parseInt(p.id))
-    .filter(id => !isNaN(id));
-
-  return idsNumericos.length > 0 ? Math.max(...idsNumericos) : 0;
-};
+    const idsNumericos = productos
+      .map(p => parseInt(p.id))
+      .filter(id => !isNaN(id));
+    return idsNumericos.length > 0 ? Math.max(...idsNumericos) : 0;
+  };
 
   return (
     <div className="inventario-container">
@@ -770,15 +921,14 @@ export default function AdminInventario() {
 
               <div className="forms-group">
                 <label className="formula-toggle">
-  <input
-    type="checkbox"
-    checked={showFormulas}
-    onChange={handleToggleFormulas}
-  />
-  <span className="toggle-slider"></span>
-  <span className="toggle-text">¿Este producto tiene fórmula?</span>
-</label>
-
+                  <input
+                    type="checkbox"
+                    checked={showFormulas}
+                    onChange={handleToggleFormulas}
+                  />
+                  <span className="toggle-slider"></span>
+                  <span className="toggle-text">¿Este producto tiene fórmula?</span>
+                </label>
               </div>
 
               {showFormulas && (
@@ -833,7 +983,6 @@ export default function AdminInventario() {
                     </div>
                   </div>
 
-                  {/* Precio único para producto(s) con fórmula (antes: precio por fórmula) */}
                   {formData.idFormulas.length > 0 && (
                     <div className="form-group">
                       <label>Precio *</label>
@@ -924,7 +1073,6 @@ export default function AdminInventario() {
                   </div>
                 </>
               ) : (
-                // si no es ADICIONALES y no tiene fórmulas, mostrar stock + precio (existing)
                 !tieneFormulas && (
                   <>
                     <div className="form-group">

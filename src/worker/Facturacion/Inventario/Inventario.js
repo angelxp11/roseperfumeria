@@ -23,95 +23,85 @@ export default function Inventario({ onAgregarAlCarrito }) {
 	const [esenciasAdicionales, setEsenciasAdicionales] = useState([]);
 	const [loadingEsenciasAdicionales, setLoadingEsenciasAdicionales] = useState(false);
 	const [selectedEsenciaAdicional, setSelectedEsenciaAdicional] = useState(null);
-	// Reemplazamos gramosAdicional + cantidadAdicional por una sola cantidad total en gramos
 	const [cantidadAdicionar, setCantidadAdicionar] = useState('');
 	const [esenciasCache, setEsenciasCache] = useState([]);
 	const [generosDisponibles, setGenerosDisponibles] = useState([]);
 	const [generoActivo, setGeneroActivo] = useState('');
-
+	
+	// NUEVO: Cache de todos los productos cargados desde Firestore con géneros resueltos
+	const [productosCache, setProductosCache] = useState([]);
 
 	useEffect(() => {
-		cargarCategorias();
+		cargarEsenciasCache();
 	}, []);
+
 	useEffect(() => {
-	cargarEsenciasCache();
-}, []);
-const cargarEsenciasCache = async () => {
-	try {
-		const ref = collection(db, 'ESENCIA');
-		const snap = await getDocs(ref);
-
-		const data = snap.docs.map(d => ({
-			id: d.id,
-			...d.data()
-		}));
-
-		setEsenciasCache(data);
-
-		// géneros únicos
-		const generos = [
-			...new Set(
-				data
-					.map(e => (e.genero || '').trim())
-					.filter(g => g && g.toUpperCase() !== 'PRODUCCION')
-			)
-		];
-
-		setGenerosDisponibles(generos);
-	} catch (err) {
-		console.error('Error cargando esencias:', err);
-	}
-};
-const categoriaConGenero =
-	['FRAGANCIA', 'CREMA'].includes(
-		(categoriaActiva || '').toUpperCase()
-	);
-
+		// Una vez que tenemos esencias cacheadas, cargar todas las categorías y productos
+		if (esenciasCache.length > 0) {
+			cargarCategoriasYProductos();
+		}
+	}, [esenciasCache]);
 
 	useEffect(() => {
 		filtrarProductos();
 	}, [busqueda, productosInventario, generoActivo]);
 
-	const cargarCategorias = async () => {
+	const cargarEsenciasCache = async () => {
+		try {
+			const ref = collection(db, 'ESENCIA');
+			const snap = await getDocs(ref);
+
+			const data = snap.docs.map(d => ({
+				id: d.id,
+				...d.data()
+			}));
+
+			setEsenciasCache(data);
+
+			// géneros únicos
+			const generos = [
+				...new Set(
+					data
+						.map(e => (e.genero || '').trim())
+						.filter(g => g && g.toUpperCase() !== 'PRODUCCION')
+				)
+			];
+
+			setGenerosDisponibles(generos);
+		} catch (err) {
+			console.error('Error cargando esencias:', err);
+		}
+	};
+
+	const categoriaConGenero =
+		['FRAGANCIA', 'CREMA'].includes(
+			(categoriaActiva || '').toUpperCase()
+		);
+
+	// NUEVO: Cargar TODAS las categorías y TODOS los productos una sola vez
+	const cargarCategoriasYProductos = async () => {
 		try {
 			setLoading(true);
 			const productosRef = collection(db, 'PRODUCTOS');
 			const snapshot = await getDocs(productosRef);
 			
 			const categoriasSet = new Set();
+			const todosLosProductos = [];
+
 			snapshot.docs.forEach(doc => {
-				const cat = doc.data().category;
+				const data = doc.data();
+				const cat = data.category;
+				
+				// Agregar categoría si no es ENVASE
 				if (cat && String(cat).toUpperCase() !== 'ENVASE') {
 					categoriasSet.add(cat);
 				}
-			});
-			
-			const categoriasArray = Array.from(categoriasSet);
-			setCategorias(categoriasArray);
-			
-			if (categoriasArray.length > 0) {
-				setCategoriaActiva(categoriasArray[0]);
-				cargarProductosPorCategoria(categoriasArray[0]);
-			}
-		} catch (err) {
-			console.error('Error al cargar categorías:', err);
-		} finally {
-			setLoading(false);
-		}
-	};
 
-	const cargarProductosPorCategoria = async (categoria) => {
-		try {
-			const productosRef = collection(db, 'PRODUCTOS');
-			const q = query(productosRef, where('category', '==', categoria));
-			const snapshot = await getDocs(q);
-			
-			const prods = snapshot.docs.map(doc => {
-				const data = doc.data();
-				// intentar resolver genero desde esenciasCache si existe idEsencia
+				// Construir producto con género resuelto desde esenciasCache
 				const idEsencia = data.idEsencia || null;
 				const genero = idEsencia ? (esenciasCache.find(e => e.id === idEsencia)?.genero || '') : '';
-				return {
+
+				const producto = {
 					documentId: doc.id,
 					id: data.id,
 					name: data.name,
@@ -124,13 +114,59 @@ const categoriaConGenero =
 					medida: data.idFormula ? extraerMedida(data.idFormula) : '',
 					genero
 				};
+
+				todosLosProductos.push(producto);
 			});
 			
-			setProductosInventario(prods);
-			setProductosFiltrados(prods);
+			const categoriasArray = Array.from(categoriasSet);
+			setCategorias(categoriasArray);
+			setProductosCache(todosLosProductos); // NUEVO: guardar en caché
+			
+			if (categoriasArray.length > 0) {
+				const primeraCategoria = categoriasArray[0];
+				setCategoriaActiva(primeraCategoria);
+				setGeneroActivo('');
+				
+				// MODIFICADO: Filtrar inmediatamente desde el caché local
+				const filtrados = todosLosProductos.filter(prod => {
+					if (prod.category !== primeraCategoria) return false;
+					return true;
+				});
+				
+				setProductosInventario(filtrados);
+				setProductosFiltrados(filtrados);
+				
+				// Si la categoría requiere género, establece el primer género disponible
+				if (['FRAGANCIA', 'CREMA'].includes((primeraCategoria || '').toUpperCase()) && generosDisponibles.length > 0) {
+					setGeneroActivo(generosDisponibles[0]);
+				}
+			}
 		} catch (err) {
-			console.error('Error al cargar productos:', err);
+			console.error('Error al cargar categorías y productos:', err);
+		} finally {
+			setLoading(false);
 		}
+	};
+
+	// NUEVO: Filtrar productos desde caché local sin hacer consultas a Firestore
+	const filtroDesdeCache = (categoria, genero) => {
+		const filtrados = productosCache.filter(prod => {
+			// Filtro por categoría
+			if (prod.category !== categoria) return false;
+
+			// Filtro por género si la categoría lo requiere
+			const requiereGenero = ['FRAGANCIA', 'CREMA'].includes((categoria || '').toUpperCase());
+			if (requiereGenero && genero) {
+				const prodGenero = (prod.genero || '').toString().trim();
+				if (!prodGenero) return false;
+				if (prodGenero.toLowerCase() !== genero.toLowerCase()) return false;
+			}
+
+			return true;
+		});
+
+		setProductosInventario(filtrados);
+		setProductosFiltrados(filtrados);
 	};
 
 	const normalizarIdBusqueda = (id) => {
@@ -187,9 +223,10 @@ const categoriaConGenero =
 	const handleCambiarCategoria = (categoria) => {
 		setCategoriaActiva(categoria);
 		setBusqueda('');
-		cargarProductosPorCategoria(categoria);
+		// MODIFICADO: Usar filtro desde caché en lugar de hacer consulta a Firestore
+		filtroDesdeCache(categoria, '');
 		// Si la categoría requiere género, establece el primer género disponible
-		if (categoriaConGenero && generosDisponibles.length > 0) {
+		if (['FRAGANCIA', 'CREMA'].includes((categoria || '').toUpperCase()) && generosDisponibles.length > 0) {
 			setGeneroActivo(generosDisponibles[0]);
 		} else {
 			setGeneroActivo('');
@@ -265,21 +302,13 @@ const categoriaConGenero =
 		}
 	};
 
-	const cargarEsenciasAdicionales = async () => {
-		try {
-			setLoadingEsenciasAdicionales(true);
-			const esenciasRef = collection(db, 'ESENCIA');
-			const snapshot = await getDocs(esenciasRef);
-			const esen = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-			// Excluir las destinadas a PRODUCCION (misma lógica que AdminEsencias)
-			const filtradas = esen.filter(e => (e.genero || '').toString().trim().toUpperCase() !== 'PRODUCCION');
-			setEsenciasAdicionales(filtradas);
-		} catch (err) {
-			console.error('Error cargando esencias adicionales:', err);
-			setEsenciasAdicionales([]);
-		} finally {
-			setLoadingEsenciasAdicionales(false);
-		}
+	// MODIFICADO: Usar esenciasCache en lugar de hacer consulta a Firestore
+	const obtenerEsenciasAdicionales = () => {
+		// Filtrar esencias excluyendo las destinadas a PRODUCCION
+		const filtradas = esenciasCache.filter(e => 
+			(e.genero || '').toString().trim().toUpperCase() !== 'PRODUCCION'
+		);
+		return filtradas;
 	};
 
 	const handleProductoClick = async (producto) => {
@@ -328,11 +357,13 @@ const categoriaConGenero =
 					}
 				}
 				// Si no es INSUMO o no tiene idEsencia resolvible, abrir modal para elegir esencia
+				// MODIFICADO: No consultar Firestore, usar esenciasCache directamente
 				setProductoSeleccionado(producto);
 				setShowAdicionalModal(true);
 				setSelectedEsenciaAdicional(null);
 				setCantidadAdicionar('1'); // default 1g (no se muestra input)
-				cargarEsenciasAdicionales();
+				// Cargar esencias desde caché en lugar de hacer consulta
+				setEsenciasAdicionales(obtenerEsenciasAdicionales());
 				return;
 			}
  
@@ -456,7 +487,8 @@ const categoriaConGenero =
 							onChange={(e) => {
 								const val = e.target.value || '';
 								setGeneroActivo(val);
-								if (categoriaActiva) cargarProductosPorCategoria(categoriaActiva);
+								// MODIFICADO: Usar filtro desde caché en lugar de hacer consulta
+								if (categoriaActiva) filtroDesdeCache(categoriaActiva, val);
 							}}
 							className="generos-select"
 						>
@@ -589,9 +621,7 @@ const categoriaConGenero =
 							Selecciona esencia y cantidad (g) para: {productoSeleccionado ? productoSeleccionado.name : ''}
 						</h3>
 
-						{loadingEsenciasAdicionales ? (
-							<p>Cargando esencias...</p>
-						) : esenciasAdicionales.length === 0 ? (
+						{esenciasAdicionales.length === 0 ? (
 							<>
 								<p>No hay esencias disponibles.</p>
 								<div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
