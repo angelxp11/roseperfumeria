@@ -54,6 +54,8 @@ export default function MetodoDePago({ total, onClose, onCompletarCompra, items 
   const efectivo = metodosPago.find(m => !(m.type) || (m.type || '').toString().trim().toUpperCase() === 'EFECTIVO');
   const transferencias = metodosPago.filter(m => (m.type || '').toString().trim().toUpperCase() === 'TRANSFERENCIA');
   const todosMetodos = metodosPago;
+  
+  
  
   // Incrementar balance en PAYMENT (docId) usando increment para evitar race conditions
   // DESHABILITADO: en el punto de venta solo se debe actualizar CAJAS, no PAYMENT (wallet).
@@ -323,41 +325,43 @@ const descontarInsumosPorFormula = async (items = []) => {
 	};
 
   const crearFactura = async (metodo, montoTotal, detalleMetodos) => {
-    try {
-      const fechaHoyId_val = fechaHoyId();
-      const facturaRef = doc(db, 'FACTURAS', fechaHoyId_val);
-      const facturaId = String(Date.now());
+  try {
+    const fechaHoyId_val = fechaHoyId();
+    const facturaRef = doc(db, 'FACTURAS', fechaHoyId_val);
+    const facturaId = String(Date.now());
 
-      const productosDetalles = items
-        .map(item => ({
-          id: item.id || item.documentId || 'N/A',
-          nombre: item.nombre || item.name || 'Producto sin nombre',
-          cantidad: item.cantidad || 0,
-          precio_unitario: item.precio || item.price || 0,
-          subtotal: (item.cantidad || 0) * (item.precio || item.price || 0),
-          // NEW: preservar campos útiles para restaurar stock en caso de cancelación
-          documentId: item.documentId || null,
-          idFormula: item.idFormula || null,
-          idEsencia: item.idEsencia || null,
-          esenciaGramos: item.esenciaGramos || null, // agregado para ADICIONALES
-          category: item.category || null // agregado para detectar CREMA al cancelar
-        }))
-        .filter(p => p.nombre && p.cantidad > 0);
+    const productosDetalles = items
+      .map(item => ({
+        id: item.id || item.documentId || 'N/A',
+        nombre: item.nombre || item.name || 'Producto sin nombre',
+        cantidad: item.cantidad || 0,
+        precio_unitario: item.precio || item.price || 0,
+        subtotal: (item.cantidad || 0) * (item.precio || item.price || 0),
+        documentId: item.documentId || null,
+        idFormula: item.idFormula || null,
+        idEsencia: item.idEsencia || null,
+        esenciaGramos: item.esenciaGramos || null,
+        category: item.category || null
+      }))
+      .filter(p => p.nombre && p.cantidad > 0);
 
-      const facturaObj = {
-        fecha: new Date().toISOString(),
-        productos: productosDetalles.length > 0 ? productosDetalles : [],
-        total: montoTotal || 0,
-        metodo_pago: detalleMetodos && typeof detalleMetodos === 'object' ? detalleMetodos : {},
-        estado: 'COMPLETADA'
-      };
+    const facturaObj = {
+      fecha: new Date().toISOString(),
+      productos: productosDetalles.length > 0 ? productosDetalles : [],
+      total: montoTotal || 0,
+      metodo_pago: detalleMetodos && typeof detalleMetodos === 'object' ? detalleMetodos : {},
+      estado: 'COMPLETADA'
+    };
 
-      await setDoc(facturaRef, { [facturaId]: facturaObj }, { merge: true });
-    } catch (e) {
-      console.error('Error creando factura:', e);
-      throw e;
-    }
-  };
+    await setDoc(facturaRef, { [facturaId]: facturaObj }, { merge: true });
+
+    return facturaId; // 👈 IMPORTANTE
+  } catch (e) {
+    console.error('Error creando factura:', e);
+    throw e;
+  }
+};
+
 
   /* =======================
      COMPLETAR COMPRA
@@ -366,61 +370,87 @@ const descontarInsumosPorFormula = async (items = []) => {
     try {
       setCargando(true);
 
+      // Validaciones y acumulación de movimientos en CAJA + detalle de métodos
+      const detalleMetodos = [];
+
       if (metodoSeleccionado === 'efectivo') {
         if (Number(montoEntregado) < total) {
           toast.error('Dinero insuficiente');
           setCargando(false);
           return;
         }
-        // actualizar sólo CAJA (NO WALLET/PAYMENT)
         await incrementarCaja('EFECTIVO', total);
-        await crearFactura('Efectivo', total, { metodo: 'Efectivo' });
-      }
-
-      if (metodoSeleccionado === 'transferencia') {
-        if (cuentaTransferencia) {
-          const clave = obtenerClaveCaja(cuentaTransferencia);
-          const nombreMetodo = obtenerNombreMetodoPago(cuentaTransferencia);
-          // actualizar sólo CAJA (NO WALLET/PAYMENT)
-          await incrementarCaja(clave, total);
-          await crearFactura(nombreMetodo, total, { metodo: nombreMetodo });
+        detalleMetodos.push({ metodo: 'Efectivo', monto: total });
+      } else if (metodoSeleccionado === 'transferencia') {
+        if (!cuentaTransferencia) {
+          toast.error('Seleccione una cuenta de transferencia');
+          setCargando(false);
+          return;
         }
-      }
-
-      if (metodoSeleccionado === 'dividido') {
+        const clave = obtenerClaveCaja(cuentaTransferencia);
+        const nombreMetodo = obtenerNombreMetodoPago(cuentaTransferencia);
+        await incrementarCaja(clave, total);
+        detalleMetodos.push({ metodo: nombreMetodo, monto: total });
+      } else if (metodoSeleccionado === 'dividido') {
         const monto1 = Number(metodos.montoPrimero) || 0;
         const monto2 = total - monto1;
-        
-        let detalleMetodos = [];
 
+        if (!metodos.primero || !metodos.segundo || monto1 <= 0) {
+          toast.error('Complete los métodos y montos para pago dividido');
+          setCargando(false);
+          return;
+        }
+
+        // Primer método
         if (metodos.primero === 'efectivo') {
           await incrementarCaja('EFECTIVO', monto1);
           detalleMetodos.push({ metodo: 'Efectivo', monto: monto1 });
         }
         if (metodos.primero === 'transferencia' && metodos.cuentaPrimero) {
           await incrementarCaja(obtenerClaveCaja(metodos.cuentaPrimero), monto1);
-          const nombreMetodo = obtenerNombreMetodoPago(metodos.cuentaPrimero);
-          detalleMetodos.push({ metodo: nombreMetodo, monto: monto1 });
+          detalleMetodos.push({ metodo: obtenerNombreMetodoPago(metodos.cuentaPrimero), monto: monto1 });
         }
+
+        // Segundo método
         if (metodos.segundo === 'efectivo') {
           await incrementarCaja('EFECTIVO', monto2);
           detalleMetodos.push({ metodo: 'Efectivo', monto: monto2 });
         }
         if (metodos.segundo === 'transferencia' && metodos.cuentaSegundo) {
           await incrementarCaja(obtenerClaveCaja(metodos.cuentaSegundo), monto2);
-          const nombreMetodo = obtenerNombreMetodoPago(metodos.cuentaSegundo);
-          detalleMetodos.push({ metodo: nombreMetodo, monto: monto2 });
+          detalleMetodos.push({ metodo: obtenerNombreMetodoPago(metodos.cuentaSegundo), monto: monto2 });
         }
-
-        await crearFactura('Dividido', total, detalleMetodos);
+      } else if (metodoSeleccionado === 'tarjeta') {
+        // Si aplica una caja para tarjeta, se puede incrementar aquí; por ahora solo registro en detalle
+        detalleMetodos.push({ metodo: 'Tarjeta', monto: total });
+      } else {
+        toast.error('Seleccione un método de pago');
+        setCargando(false);
+        return;
       }
 
-      if (metodoSeleccionado === 'tarjeta') {
-        // actualizar sólo CAJA (si aplica) o solo crear factura — NO WALLET/PAYMENT
-        await crearFactura('Tarjeta', total, { metodo: 'Tarjeta' });
+      // Crear factura UNA sola vez y obtener el ID
+      const facturaId = await crearFactura(metodoSeleccionado, total, detalleMetodos);
+
+      // Copiar al portapapeles con fallback
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(facturaId);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = facturaId;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+        }
+        toast.success(`¡Pago realizado! ID copiado: ${facturaId}`);
+      } catch (err) {
+        console.warn('No se pudo copiar al portapapeles', err);
+        toast.info(`Factura creada: ${facturaId}`);
       }
 
-      // después de crear factura y actualizar caja
+      // Descontar insumos después de crear la factura
       await descontarInsumosPorFormula(items);
 
       toast.success('¡Pago realizado con éxito!');

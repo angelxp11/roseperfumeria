@@ -312,76 +312,98 @@ export default function Inventario({ onAgregarAlCarrito }) {
 	};
 
 	const handleProductoClick = async (producto) => {
-		if (producto.tieneFormula && producto.idFormula) {
-			// Abrir modal de envases en vez de agregar directo
-			setProductoSeleccionado(producto);
-			setShowEnvasesModal(true);
-			cargarEnvasesParaFormula(producto.idFormula);
-		} else {
-			// NUEVO: producto de categoría ADICIONALES -> abrir modal de selección de esencia y gramos
-			if ((producto.category || '').toString().trim().toUpperCase() === 'ADICIONALES') {
-				// Si el producto ya tiene idEsencia, verificar si es un INSUMO -> tratar directo
-				if (producto.idEsencia) {
-					try {
-						const insumoRef = doc(db, 'INSUMOS', producto.idEsencia);
-						const insumoSnap = await getDoc(insumoRef);
-						if (insumoSnap.exists()) {
-							const insumoData = insumoSnap.data();
-							const gramosPorUnidad = Number(producto.esenciaGramos) || 1;
-							const stockDisponible = Number(insumoData.stock || 0);
-							if (stockDisponible < gramosPorUnidad) {
-								alert(`Stock insuficiente del insumo ${insumoData.name || producto.idEsencia}. Disponible: ${stockDisponible}g`);
-								return;
-							}
-							// NOTA: no descontamos aquí para evitar doble descuento.
-							// El descuento se realizará durante el pago en metododepago.descontarInsumosPorFormula.
-							// Agregar al carrito como adicional que ya incluye el insumo descontado
-							const nombre = `${producto.name} - ${insumoData.name || insumoData.id || producto.idEsencia} ${gramosPorUnidad}g`;
-							const item = {
-								documentId: producto.documentId,
-								id: producto.id,
-								name: nombre,
-								category: producto.category,
-								price: producto.price,
-								idEsencia: producto.idEsencia,
-								esenciaGramos: gramosPorUnidad,
-								cantidad: 1,
-								isAdicional: true
-							};
-							onAgregarAlCarrito && onAgregarAlCarrito(item);
-							return;
-						}
-					} catch (err) {
-						console.error('Error verificando insumo:', err);
-						// en caso de error, continuar y abrir modal para seleccionar esencia
-					}
-				}
-				// Si no es INSUMO o no tiene idEsencia resolvible, abrir modal para elegir esencia
-				// MODIFICADO: No consultar Firestore, usar esenciasCache directamente
-				setProductoSeleccionado(producto);
-				setShowAdicionalModal(true);
-				setSelectedEsenciaAdicional(null);
-				setCantidadAdicionar('1'); // default 1g (no se muestra input)
-				// Cargar esencias desde caché en lugar de hacer consulta
-				setEsenciasAdicionales(obtenerEsenciasAdicionales());
-				return;
-			}
- 
- 			// Producto sin fórmula: agregar directo
- 			if (onAgregarAlCarrito) {
- 				onAgregarAlCarrito({
- 					documentId: producto.documentId,
- 					id: producto.id,
- 					name: producto.name,
- 					category: producto.category,
- 					price: producto.price,
- 					idFormula: producto.idFormula,
- 					idEsencia: producto.idEsencia,
- 					cantidad: 1
- 				});
- 			}
- 		}
- 	};
+
+    // 🔥 CASO ESPECIAL: DESCUENTO (no abre nada, solo agrega negativo)
+    if (
+        (producto.name || '').toString().trim().toUpperCase() === 'DESCUENTOS'
+    ) {
+        if (onAgregarAlCarrito) {
+            onAgregarAlCarrito({
+                documentId: producto.documentId,
+                id: producto.id,
+                name: producto.name,
+                category: producto.category,
+                price: -Math.abs(Number(producto.price) || 0), // siempre negativo
+                cantidad: 1,
+                isDescuento: true
+            });
+        }
+        return; // 🚫 detener ejecución aquí
+    }
+
+    // 🔹 Si tiene fórmula → abrir modal de envases
+    if (producto.tieneFormula && producto.idFormula) {
+        setProductoSeleccionado(producto);
+        setShowEnvasesModal(true);
+        cargarEnvasesParaFormula(producto.idFormula);
+        return;
+    }
+
+    // 🔹 Si es categoría ADICIONALES
+    if ((producto.category || '').toString().trim().toUpperCase() === 'ADICIONALES') {
+
+        // Si tiene idEsencia → verificar si es INSUMO
+        if (producto.idEsencia) {
+            try {
+                const insumoRef = doc(db, 'INSUMOS', producto.idEsencia);
+                const insumoSnap = await getDoc(insumoRef);
+
+                if (insumoSnap.exists()) {
+                    const insumoData = insumoSnap.data();
+                    const gramosPorUnidad = Number(producto.esenciaGramos) || 1;
+                    const stockDisponible = Number(insumoData.stock || 0);
+
+                    if (stockDisponible < gramosPorUnidad) {
+                        alert(`Stock insuficiente del insumo ${insumoData.name || producto.idEsencia}. Disponible: ${stockDisponible}g`);
+                        return;
+                    }
+
+                    const nombre = `${producto.name} - ${insumoData.name || insumoData.id || producto.idEsencia} ${gramosPorUnidad}g`;
+
+                    const item = {
+                        documentId: producto.documentId,
+                        id: producto.id,
+                        name: nombre,
+                        category: producto.category,
+                        price: producto.price,
+                        idEsencia: producto.idEsencia,
+                        esenciaGramos: gramosPorUnidad,
+                        cantidad: 1,
+                        isAdicional: true
+                    };
+
+                    onAgregarAlCarrito && onAgregarAlCarrito(item);
+                    return;
+                }
+            } catch (err) {
+                console.error('Error verificando insumo:', err);
+            }
+        }
+
+        // Si no es insumo → abrir modal para elegir esencia
+        setProductoSeleccionado(producto);
+        setShowAdicionalModal(true);
+        setSelectedEsenciaAdicional(null);
+        setCantidadAdicionar('1');
+        setEsenciasAdicionales(obtenerEsenciasAdicionales());
+        return;
+    }
+
+    // 🔹 Producto normal (sin fórmula y no adicional)
+    if (onAgregarAlCarrito) {
+        onAgregarAlCarrito({
+            documentId: producto.documentId,
+            id: producto.id,
+            name: producto.name,
+            category: producto.category,
+            price: producto.price,
+            idFormula: producto.idFormula,
+            idEsencia: producto.idEsencia,
+            cantidad: 1
+        });
+    }
+};
+
 
 	const handleConfirmarAdicional = () => {
 		if (!selectedEsenciaAdicional) return;
