@@ -331,18 +331,22 @@ const descontarInsumosPorFormula = async (items = []) => {
     const facturaId = String(Date.now());
 
     const productosDetalles = items
-      .map(item => ({
-        id: item.id || item.documentId || 'N/A',
-        nombre: item.nombre || item.name || 'Producto sin nombre',
-        cantidad: item.cantidad || 0,
-        precio_unitario: item.precio || item.price || 0,
-        subtotal: (item.cantidad || 0) * (item.precio || item.price || 0),
-        documentId: item.documentId || null,
-        idFormula: item.idFormula || null,
-        idEsencia: item.idEsencia || null,
-        esenciaGramos: item.esenciaGramos || null,
-        category: item.category || null
-      }))
+      .map(item => {
+        // Determinar cantidad: si hay esenciaGramos, usarlo; sino usar cantidad
+        const cantidadReal = item.esenciaGramos || item.cantidad || 0;
+        return {
+          id: item.id || item.documentId || 'N/A',
+          nombre: item.nombre || item.name || 'Producto sin nombre',
+          cantidad: cantidadReal,
+          precio_unitario: item.precio || item.price || 0,
+          subtotal: cantidadReal * (item.precio || item.price || 0),
+          documentId: item.documentId || null,
+          idFormula: item.idFormula || null,
+          idEsencia: item.idEsencia || null,
+          esenciaGramos: item.esenciaGramos || null,
+          category: item.category || null
+        };
+      })
       .filter(p => p.nombre && p.cantidad > 0);
 
     const facturaObj = {
