@@ -103,9 +103,10 @@ class ReportePDF {
   }
 
   static async getFacturas(startDate, endDate) {
-    const data = [];
+    // Devuelve un array de facturas completas (igual que cargarFacturas en admin/facturas/facturas.js)
+    const facturas = [];
     const current = new Date(startDate);
-    current.setHours(0,0,0,0);
+    current.setHours(0, 0, 0, 0);
 
     while (current <= endDate) {
       const docId = this.formatDateToDocId(current);
@@ -113,18 +114,22 @@ class ReportePDF {
       const snap = await getDoc(ref);
 
       if (snap.exists()) {
-        Object.values(snap.data()).forEach(f => {
-          // 🔥 NUEVO: Solo incluir productos de facturas NO canceladas
-          if (f?.estado !== 'CANCELADA') {
-            f?.productos?.forEach(p => {
-              data.push(p);
-            });
-          }
-        });
+        const data = snap.data();
+        for (const [facturaId, facturaData] of Object.entries(data)) {
+          facturas.push({
+            documentId: docId,
+            facturaId,
+            fecha: facturaData.fecha || new Date().toISOString(),
+            ...facturaData
+          });
+        }
       }
       current.setDate(current.getDate() + 1);
     }
-    return data;
+
+    // ordenar por fecha mas reciente primero
+    facturas.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    return facturas;
   }
 
   static agruparProductos(productos) {
@@ -249,19 +254,29 @@ class ReportePDF {
           totales.BANCOLOMBIA.esperado += Number(cajaData.APERTURA.BANCOLOMBIA || 0);
         }
 
-        // Sumar ventas del día
-        const facturas = await this.getFacturas(current, current);
-        if (facturas.length > 0) {
-          const facturasPorMetodo = {};
-          facturas.forEach(f => {
-            const metodo = f.metodo_pago || 'EFECTIVO';
-            if (!facturasPorMetodo[metodo]) facturasPorMetodo[metodo] = 0;
-            facturasPorMetodo[metodo] += f.precio_unitario * f.cantidad;
-          });
-          totales.EFECTIVO.esperado += Number(facturasPorMetodo.EFECTIVO || 0);
-          totales.NEQUI.esperado += Number(facturasPorMetodo.NEQUI || 0);
-          totales.BANCOLOMBIA.esperado += Number(facturasPorMetodo.BANCOLOMBIA || 0);
-        }
+        // Sumar ventas del dia
+        const facturasDelDia = await this.getFacturas(current, current);
+        facturasDelDia.forEach(f => {
+          if (f?.estado !== 'CANCELADA') {
+            // Si tiene metodo_pago en array
+            if (Array.isArray(f.metodo_pago)) {
+              f.metodo_pago.forEach(m => {
+                const metodo = m.metodo || 'EFECTIVO';
+                if (metodo === 'EFECTIVO') totales.EFECTIVO.esperado += Number(m.monto || 0);
+                if (metodo === 'NEQUI') totales.NEQUI.esperado += Number(m.monto || 0);
+                if (metodo === 'BANCOLOMBIA') totales.BANCOLOMBIA.esperado += Number(m.monto || 0);
+              });
+            } else if (typeof f.metodo_pago === 'object' && f.metodo_pago?.metodo) {
+              const metodo = f.metodo_pago.metodo || 'EFECTIVO';
+              if (metodo === 'EFECTIVO') totales.EFECTIVO.esperado += Number(f.metodo_pago.monto || 0);
+              if (metodo === 'NEQUI') totales.NEQUI.esperado += Number(f.metodo_pago.monto || 0);
+              if (metodo === 'BANCOLOMBIA') totales.BANCOLOMBIA.esperado += Number(f.metodo_pago.monto || 0);
+            } else {
+              // Si es string, lo consideramos EFECTIVO
+              totales.EFECTIVO.esperado += Number(f.total || 0);
+            }
+          }
+        });
       }
 
       current.setDate(current.getDate() + 1);
@@ -322,8 +337,9 @@ class ReportePDF {
     const isSingleDay = this.formatDate(startDate) === this.formatDate(endDate);
 
     const movimientos = await this.getMovimientos(startDate, endDate);
-    let productos = await this.getFacturas(startDate, endDate);
-    productos = this.agruparProductos(productos);
+    const facturas = await this.getFacturas(startDate, endDate);
+    // Filtrar solo facturas vendidas (no canceladas)
+    const facturasVendidas = facturas.filter(f => f.estado !== 'CANCELADA');
 
     const pdf = new jsPDF();
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -347,70 +363,108 @@ class ReportePDF {
     );
     y += 12;
 
-    /* ===== PRODUCTOS ===== */
-    if (productos.length) {
+    /* ===== PRODUCTOS VENDIDOS (POR FACTURA) ===== */
+    if (facturasVendidas.length) {
       pdf.setFontSize(12);
       pdf.setFont(undefined, 'bold');
       pdf.text('Productos Vendidos', 15, y);
       y += 7;
 
       pdf.setFontSize(9);
-      pdf.setFillColor(230);
-      pdf.rect(15, y - 5, 180, 7, 'F');
-
-      const cols = [15, 85, 120, 155];
-      pdf.text('Producto', cols[0], y);
-      pdf.text('Precio', cols[1], y);
-      pdf.text('Cant.', cols[2], y);
-      pdf.text('Total', cols[3], y);
-      y += 3;
-
       pdf.setFont(undefined, 'normal');
+      pdf.text(`Total facturas vendidas: ${facturasVendidas.length}`, 15, y);
+      y += 8;
 
-      const rowHeight = 8;
-      let totalProductos = 0;
-      let totalCantidad = 0;
-
-      productos.forEach(p => {
-        const total = p.precio_unitario * p.cantidad;
-        totalProductos += total;
-        totalCantidad += p.cantidad;
-
-        const nameLines = pdf.splitTextToSize(p.nombre, cols[1] - cols[0] - 2);
-        const rowHeightAdjusted = Math.max(rowHeight, nameLines.length * 4 + 3);
-
-        if (y + rowHeightAdjusted > 280) {
+      // Para cada factura, imprimir su tabla de productos y total de factura
+      facturasVendidas.forEach(f => {
+        if (y > 260) {
           pdf.addPage();
           y = 20;
         }
 
-        const textY = y + 5;
+        const { fecha, hora } = this.splitISO(f.fecha);
+        pdf.setFont(undefined, 'bold');
+        pdf.setFontSize(10);
+        pdf.text(`Factura #${f.facturaId} - ${fecha} ${hora}`, 15, y);
+        pdf.setFont(undefined, 'normal');
+        y += 6;
 
-        nameLines.forEach((line, i) => {
-          pdf.text(line, cols[0] + 1, textY + i * 4);
+        // Encabezado de tabla
+        pdf.setFillColor(230);
+        pdf.rect(15, y - 5, 180, 7, 'F');
+
+        const cols = [15, 85, 120, 155];
+        pdf.setFontSize(9);
+        pdf.text('Producto', cols[0], y);
+        pdf.text('Cantidad', cols[1], y);
+        pdf.text('Precio Unit.', cols[2], y);
+        pdf.text('Subtotal', cols[3], y);
+        y += 3;
+
+        pdf.setFont(undefined, 'normal');
+        const rowHeight = 8;
+
+        const productosFactura = Array.isArray(f.productos) ? f.productos : [];
+
+        // Filas de productos
+        productosFactura.forEach(p => {
+          const nameLines = pdf.splitTextToSize(p.nombre || '-', cols[1] - cols[0] - 2);
+          const rowHeightAdjusted = Math.max(rowHeight, nameLines.length * 4 + 3);
+
+          if (y + rowHeightAdjusted > 280) {
+            pdf.addPage();
+            y = 20;
+          }
+
+          const textY = y + 5;
+          nameLines.forEach((line, i) => {
+            pdf.text(line, cols[0] + 1, textY + i * 4);
+          });
+
+          pdf.text(String(p.cantidad || 0), cols[1], textY);
+          pdf.text(this.formatMoney(p.precio_unitario || 0), cols[2], textY);
+          pdf.text(this.formatMoney(p.subtotal || (Number(p.precio_unitario || 0) * Number(p.cantidad || 0))), cols[3], textY);
+
+          pdf.setDrawColor(200);
+          pdf.line(15, y + rowHeightAdjusted, 195, y + rowHeightAdjusted);
+
+          y += rowHeightAdjusted;
         });
-        pdf.text(this.formatMoney(p.precio_unitario), cols[1], textY);
-        pdf.text(String(p.cantidad), cols[2], textY);
-        pdf.text(this.formatMoney(total), cols[3], textY);
 
+        // Total de la factura
+        pdf.setFillColor(220);
+        pdf.rect(15, y, 180, 7, 'F');
+        pdf.setFont(undefined, 'bold');
+        pdf.setFontSize(9);
+        pdf.text('TOTAL FACTURA:', 15 + 2, y + 5);
+        pdf.text(this.formatMoney(f.total || 0), cols[3], y + 5);
         pdf.setDrawColor(200);
-        pdf.line(15, y + rowHeightAdjusted, 195, y + rowHeightAdjusted);
+        pdf.rect(15, y, 180, 7);
+        y += 10;
 
-        y += rowHeightAdjusted;
+        y += 4;
       });
 
-      pdf.setFillColor(220);
-      pdf.rect(15, y, 180, 7, 'F');
-      pdf.setFont(undefined, 'bold');
-      pdf.text('TOTAL', cols[0], y + 5);
-      pdf.text(this.formatMoney(0), cols[1], y + 5);
-      pdf.text(String(totalCantidad), cols[2], y + 5);
-      pdf.text(this.formatMoney(totalProductos), cols[3], y + 5);
-      pdf.setDrawColor(200);
-      pdf.line(15, y + 7, 195, y + 7);
-      y += 10;
+      // Venta total del día
+      if (y > 260) {
+        pdf.addPage();
+        y = 20;
+      }
 
-      y += 5;
+      y += 8;
+
+      const ventaTotalDelDia = facturasVendidas.reduce((sum, f) => sum + (Number(f.total) || 0), 0);
+
+      pdf.setFillColor(200, 220, 255);
+      pdf.rect(15, y, 180, 10, 'F');
+      pdf.setFont(undefined, 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(0);
+      pdf.text('VENTA TOTAL DEL DÍA:', 15 + 2, y + 7);
+      pdf.text(this.formatMoney(ventaTotalDelDia), 155, y + 7);
+      pdf.setDrawColor(0);
+      pdf.rect(15, y, 180, 10);
+      y += 15;
     }
 
     /* ===== GASTOS (Ingresos, Retiros, Transferencias) ===== */
