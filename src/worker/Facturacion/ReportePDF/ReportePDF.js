@@ -331,8 +331,8 @@ class ReportePDF {
   /* ================= PDF ================= */
 
   static async generateReport(range) {
-
     const { startDate, endDate } = this.parseRange(range);
+    const includeInventory = Boolean(range && range.includeInventory);
     const rangeLabel = this.getRangeLabelFromDates(startDate, endDate);
     const isSingleDay = this.formatDate(startDate) === this.formatDate(endDate);
 
@@ -711,6 +711,72 @@ if (isSingleDay) {
         y += totalHeight;
       });
 
+    }
+
+    /* ===== INVENTARIO GASTADO (OPCIONAL) ===== */
+    if (includeInventory && facturasVendidas.length) {
+      if (y > 240) {
+        pdf.addPage();
+        y = 20;
+      }
+
+      pdf.setFontSize(12);
+      pdf.setFont(undefined, 'bold');
+      pdf.setTextColor(40);
+      pdf.text('Inventario Gastado (Productos vendidos)', 15, y);
+      y += 7;
+
+      pdf.setFontSize(9);
+      pdf.setFillColor(230);
+      pdf.rect(15, y - 5, 180, 7, 'F');
+
+      const colsInv = [15, 140];
+      pdf.text('Producto', colsInv[0], y);
+      pdf.text('Cantidad vendida', colsInv[1], y);
+      y += 3;
+
+      pdf.setFont(undefined, 'normal');
+      pdf.setFontSize(9);
+
+      // recolectar todos los productos de las facturas vendidas
+      const productosAll = [];
+      facturasVendidas.forEach(f => {
+        const productos = Array.isArray(f.productos) ? f.productos : [];
+        productos.forEach(p => {
+          productosAll.push({ id: p.id || String(p.nombre || p.sku || Math.random()), nombre: p.nombre || 'Producto', cantidad: Number(p.cantidad || 0) });
+        });
+      });
+
+      const productosAgrup = this.agruparProductos(productosAll);
+
+      if (productosAgrup.length === 0) {
+        pdf.text('No hay productos vendidos en el período.', 15, y + 5);
+        y += 10;
+      } else {
+        productosAgrup.forEach(prod => {
+          if (y > 275) {
+            pdf.addPage();
+            y = 20;
+          }
+
+          pdf.setFillColor(245);
+          pdf.rect(15, y, 180, 7, 'F');
+          pdf.setDrawColor(200);
+          pdf.rect(15, y, 180, 7);
+
+          const textY = y + 5;
+          const nameLines = pdf.splitTextToSize(prod.nombre || '-', colsInv[1] - colsInv[0] - 4);
+          nameLines.forEach((line, i) => {
+            pdf.text(line, colsInv[0] + 2, textY + i * 3);
+          });
+
+          pdf.text(String(prod.cantidad || 0), colsInv[1], textY);
+
+          y += 7;
+        });
+
+        y += 6;
+      }
     }
 
     const fileName = `Informe_Cierre_${rangeLabel} (${this.formatDate(new Date())}).pdf`;

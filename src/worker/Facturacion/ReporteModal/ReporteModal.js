@@ -7,6 +7,7 @@ export default function ReporteModal({ onClose }) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [includeInventory, setIncludeInventory] = useState(false);
 
   const handleGenerateReport = async () => {
     if (!startDate) {
@@ -28,6 +29,7 @@ export default function ReporteModal({ onClose }) {
       const range = {
         startDate: start,
         endDate: end,
+        includeInventory: Boolean(includeInventory),
       };
       await ReportePDF.generateReport(range);
     } catch (error) {
@@ -54,6 +56,20 @@ export default function ReporteModal({ onClose }) {
 
         <div className="reporte-modal-content">
           <p>Selecciona el período para el informe:</p>
+
+          <div className="toggle-row" style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: 6 }}>Opciones de Reporte</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <label className="switch">
+                <input type="checkbox" checked={includeInventory} onChange={(e) => setIncludeInventory(e.target.checked)} disabled={generatingReport} />
+                <span className="slider" />
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span className="toggle-label">Incluir inventario gastado</span>
+                <small style={{ color: 'var(--color-text-soft)' }}>Apagado = Informe estándar. Encendido = añade inventario gastado.</small>
+              </div>
+            </div>
+          </div>
 
           <div className="date-inputs">
             <div className="date-group">

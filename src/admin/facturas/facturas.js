@@ -430,24 +430,21 @@ export default function Facturas() {
           }
         }
 
-        // NEW: Restaurar ESENCIA consumida por ADICIONALES
-        // (productos que guardaron 'esenciaGramos' y 'idEsencia' al agregarse)
-        try {
-          const esenciaId = prod.idEsencia || null;
-          const gramosPorItem = Number(prod.esenciaGramos || 0);
-          const totalGramosAdicional = gramosPorItem * (cantidad || 1);
+        // Restaurar ESENCIA solo si NO tiene fórmula
+        if (!prod.idFormula) {
+          try {
+            const esenciaId = prod.idEsencia || null;
+            const gramosPorItem = Number(prod.esenciaGramos || 0);
+            const totalGramosAdicional = gramosPorItem * (cantidad || 1);
 
-          if (esenciaId && totalGramosAdicional > 0) {
-            try {
+            if (esenciaId && totalGramosAdicional > 0) {
               const refEs = doc(db, 'ESENCIA', esenciaId);
               await updateDoc(refEs, { stock: increment(totalGramosAdicional) });
               console.log(`✅ Restaurados ${totalGramosAdicional}g en ESENCIA ${esenciaId} (adicional)`);
-            } catch (err) {
-              console.error('Error restaurando ESENCIA (adicional):', err);
             }
+          } catch (err) {
+            console.error('Error restaurando ESENCIA (adicional):', err);
           }
-        } catch (err) {
-          console.error('Error calculando/restaurando ESENCIA para adicional:', err);
         }
 
         // Caso: producto con documento en PRODUCTOS -> incrementar stock

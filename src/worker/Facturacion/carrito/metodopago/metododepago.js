@@ -332,8 +332,8 @@ const descontarInsumosPorFormula = async (items = []) => {
 
     const productosDetalles = items
       .map(item => {
-        // Determinar cantidad: si hay esenciaGramos, usarlo; sino usar cantidad
-        const cantidadReal = item.esenciaGramos || item.cantidad || 0;
+        // Siempre usar cantidad real (unidades), no mezclar con esenciaGramos
+        const cantidadReal = item.cantidad || 0;
         return {
           id: item.id || item.documentId || 'N/A',
           nombre: item.nombre || item.name || 'Producto sin nombre',
