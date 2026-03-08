@@ -1,0 +1,475 @@
+@import "../../resources/colors/colors.css";
+
+/* ===============================
+   CONTENEDOR PRINCIPAL
+================================ */
+.prc-pedidos-container{
+  width:100%;
+  max-width:1200px;
+  margin:0 auto;
+  font-family:'Segoe UI',system-ui,sans-serif;
+  color:var(--color-text);
+  border-color: var(--color-secondary);
+}
+
+/* ===============================
+   HEADER FIJO
+================================ */
+.prc-pedidos-container h2{
+  margin:0;
+  font-size:24px;
+  font-weight:600;
+}
+
+.prc-pedidos-container > h2,
+.prc-mode-switch{
+  position:sticky;
+  top:0;
+  background:var(--color-bg);
+  z-index:10;
+}
+
+.prc-pedidos-container > h2{
+  padding:18px 20px 10px 20px;
+}
+
+.prc-mode-switch{
+  margin-bottom:20px;
+  padding:6px;
+}
+
+/* ===============================
+   SWITCH CREAR / RECIBIR
+================================ */
+.prc-mode-switch{
+  display:flex;
+  position:sticky;
+  background:rgba(255,255,255,0.05);
+  border-radius:50px;
+  width:260px;
+  border:1px solid var(--color-border);
+}
+
+.prc-mode-switch label{
+  flex:1;
+  text-align:center;
+  cursor:pointer;
+  font-weight:500;
+  z-index:2;
+}
+
+.prc-mode-switch input{
+  display:none;
+}
+
+.prc-mode-switch span{
+  display:block;
+  padding:8px 0;
+}
+
+.prc-switch-slider{
+  position:absolute;
+  top:4px;
+  bottom:4px;
+  width:50%;
+  background:var(--color-primary);
+  border-radius:40px;
+  transition:.3s;
+}
+
+.mode-recibir .prc-switch-slider{
+  transform:translateX(100%);
+}
+
+/* nuevo encabezado y botones de modo fuera del contenedor principal */
+.prc-header-switch{
+  position:sticky;
+  top:0;
+  background:var(--color-bg);
+  z-index:10;
+  text-align:center;
+  padding:12px 0 8px;
+}
+
+.prc-mode-buttons{
+  display:inline-flex;
+  border:1px solid var(--color-border);
+  border-radius:50px;
+  overflow:hidden;
+  margin-top:8px;
+}
+
+.prc-mode-buttons button{
+  flex:1;
+  padding:8px 20px;
+  background:rgba(255,255,255,0.08);
+  color:var(--color-text);
+  border:none;
+  cursor:pointer;
+  transition:.2s;
+  font-weight:500;
+}
+
+.prc-mode-buttons button:hover{
+  background:rgba(255,255,255,0.15);
+}
+
+.prc-mode-buttons button.active{
+  background:var(--color-primary);
+  color:#fff;
+}
+
+
+/* ===============================
+   CONTROLES
+================================ */
+.prc-pedidos-controls{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:25px;
+  width:100%;
+}
+
+/* hace que los selects ocupen el espacio disponible */
+.prc-pedidos-controls select{
+  flex:1;
+  min-width:180px;
+}
+
+.prc-pedidos-controls select{
+  padding:9px 12px;
+  border-radius:8px;
+  border:1px solid var(--color-border);
+  background:rgba(255,255,255,0.05);
+  color:var(--color-text);
+  font-size:14px;
+}
+
+.prc-pedidos-controls select:focus{
+  outline:none;
+  border-color:var(--color-primary);
+  box-shadow:0 0 0 2px rgba(176,116,69,0.2);
+}
+
+/* opciones de los select personalizados */
+.prc-pedidos-controls select option {
+  background: #1a1a1a;
+  color: #ffffff;
+  padding: 10px;
+}
+
+/* ===============================
+   BOTONES
+================================ */
+.prc-btn{
+  border:none;
+  padding:9px 14px;
+  border-radius:8px;
+  font-size:14px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  transition:.2s;
+  font-weight:500;
+}
+
+.prc-btn:hover{
+  transform:translateY(-1px);
+}
+
+.prc-btn-primary{
+  background:var(--color-primary);
+  color:white;
+}
+
+.prc-btn-primary:hover{
+  background:var(--color-secondary);
+}
+
+.prc-btn-secondary{
+  background:rgba(255,255,255,0.08);
+  color:var(--color-text);
+  margin-left: 10px;
+}
+
+.prc-btn-secondary:hover{
+  background:rgba(255,255,255,0.15);
+}
+
+.prc-btn-success{
+  background:#16a34a;
+  color:white;
+  margin-top: 10px;
+}
+
+.prc-btn-success:hover{
+  background:#15803d;
+  margin-top: 10px;
+}
+
+.prc-btn-delete{
+  border:none;
+  background:#ef4444;
+  color:white;
+  padding:6px 9px;
+  border-radius:6px;
+  cursor:pointer;
+}
+
+.prc-btn-delete:hover{
+  background:#dc2626;
+}
+
+/* ===============================
+   TABLA
+================================ */
+.prc-order-summary{
+  margin-top:20px;
+}
+
+.prc-order-summary table{
+  width:100%;
+  border-collapse:collapse;
+  background:rgba(255,255,255,0.04);
+  border-radius:10px;
+  overflow:hidden;
+  border:1px solid var(--color-border);
+}
+
+.prc-order-summary th{
+  background:rgba(255,255,255,0.06);
+  text-align:left;
+  padding:12px;
+  font-size:14px;
+}
+
+.prc-order-summary td{
+  padding:12px;
+  border-top:1px solid var(--color-border);
+}
+
+.prc-order-summary tr:hover{
+  background:rgba(255,255,255,0.05);
+}
+
+/* ===============================
+   CANTIDAD
+================================ */
+.prc-qty-cell{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.prc-qty-btn{
+  width:28px;
+  height:28px;
+  padding:0;
+  font-size:16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.prc-qty-input{
+  width:60px;
+  text-align:center;
+  padding:4px;
+  border-radius:6px;
+  border:1px solid var(--color-border);
+  background:transparent;
+  color:var(--color-text);
+}
+
+/* ===============================
+   PEDIDOS
+================================ */
+.prc-orders-list{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  gap:16px;
+}
+
+.prc-order-entry{
+  background:rgba(255,255,255,0.04);
+  border-radius:12px;
+  padding:16px;
+  border:1px solid var(--color-border);
+  transition:.2s;
+}
+
+.prc-order-entry:hover{
+  transform:translateY(-3px);
+  border-color:var(--color-primary);
+}
+
+.prc-order-entry ul{
+  margin:10px 0;
+  padding-left:18px;
+  font-size:14px;
+}
+
+/* mantener altura constante de los ítems en la lista al seleccionar/desseleccionar */
+.prc-order-entry ul li{
+  display:flex;
+  align-items:center;
+  min-height:24px; /* ajustable si necesitas más espacio */
+}
+
+.prc-order-entry.received{
+  border-left:4px solid #22c55e;
+  background:rgba(34,197,94,0.08);
+}
+
+/* ===============================
+   CHECKBOX
+================================ */
+.prc-arrival-checkbox{
+  margin-right:8px;
+  transform:scale(1.2);
+}
+
+/* ===============================
+   MODAL
+================================ */
+.prc-modal-overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.6);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:1000;
+  /* bordes para diferenciar del contenido oscuro dentro del modal */
+  border:2px solid rgba(255,255,255,0.2);
+}
+
+.prc-modal{
+  background:var(--color-bg);
+  padding:24px;
+  border-radius:12px;
+  width:100%;
+  max-width:420px;
+  border:1px solid var(--color-border);
+  animation:prcModalIn .25s ease;
+}
+
+@keyframes prcModalIn{
+  from{
+    transform:scale(.95);
+    opacity:0;
+  }
+  to{
+    transform:scale(1);
+    opacity:1;
+  }
+}
+
+.prc-form-group{
+  display:flex;
+  flex-direction:column;
+  margin-bottom:14px;
+}
+
+.prc-form-group label{
+  font-size:13px;
+  margin-bottom:4px;
+  color:var(--color-text-soft);
+}
+
+.prc-form-group input,
+.prc-form-group select{
+  padding:8px;
+  border-radius:6px;
+  border:1px solid var(--color-border);
+  background:rgba(255,255,255,0.05);
+  color:var(--color-text);
+}
+
+.prc-modal-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  margin-top:12px;
+}
+
+/* ===============================
+   RESPONSIVE
+================================ */
+@media (max-width:768px){
+
+  .prc-pedidos-controls{
+    flex-direction:column;
+  }
+
+  .prc-pedidos-controls select{
+    width:100%;
+  }
+
+  .prc-order-summary table{
+    font-size:13px;
+  }
+
+  .prc-order-summary th,
+  .prc-order-summary td{
+    padding:8px;
+  }
+
+  .prc-qty-input{
+    width:50px;
+  }
+
+}
+/* ===============================
+   CHECKBOX MODERNO
+================================ */
+
+.prc-arrival-checkbox{
+  appearance:none;
+  -webkit-appearance:none;
+  width:20px;
+  height:20px;
+  border-radius:6px;
+  border:2px solid var(--color-border);
+  background:rgba(255,255,255,0.05);
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  transition:all .2s ease;
+  position:relative;
+}
+
+/* hover */
+.prc-arrival-checkbox:hover{
+  border-color:var(--color-primary);
+  background:rgba(255,255,255,0.08);
+  transform:scale(1.05);
+}
+
+/* checked */
+.prc-arrival-checkbox:checked{
+  background:var(--color-primary);
+  border-color:var(--color-primary);
+}
+
+/* check icon */
+.prc-arrival-checkbox:checked::after{
+  content:"✔";
+  color:white;
+  font-size:12px;
+  font-weight:bold;
+}
+
+/* focus accesible */
+.prc-arrival-checkbox:focus{
+  outline:none;
+  box-shadow:0 0 0 3px rgba(176,116,69,0.35);
+}
+
+/* animación suave */
+.prc-arrival-checkbox:active{
+  transform:scale(0.95);
+}

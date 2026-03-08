@@ -53,3 +53,14 @@ h1, h2, h3 {
   padding: 20px;
   background-color: rgba(255, 255, 255, 0.02);
 }
+
+/* utility for any header that should stay at the top */
+.fixed-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: var(--color-primary);
+  color: var(--color-text);
+  z-index: 1000;
+}

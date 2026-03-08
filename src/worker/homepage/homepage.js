@@ -6,6 +6,7 @@ import '../../resources/colors/colors.css';
 import Sidebar from '../../resources/sidebar/menu';
 import Facturacion from '../Facturacion/Facturacion';
 import Flujo from '../flujo/Ingresoandegreso';
+import PedidosReabastecer from '../pedidos/pedidosreabastecer';
 import './homepage.css';
 
 export default function WorkerHomepage() {
@@ -74,6 +75,10 @@ export default function WorkerHomepage() {
 
         {section === 'flujo' && (
           <Flujo />
+        )}
+
+        {section === 'pedidos' && (
+          <PedidosReabastecer />
         )}
       </main>
     </div>

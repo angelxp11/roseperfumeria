@@ -1,5 +1,7 @@
 .App {
   text-align: center;
+  /* ensure content is pushed below the fixed header */
+  padding-top: 70px; /* adjust if header height changes */
 }
 
 .App-logo {
@@ -13,15 +15,20 @@
   }
 }
 
+/* fixed header at the top using color variables */
 .App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 70px;
+  background-color: var(--color-primary);
+  color: var(--color-text);
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   font-size: calc(10px + 2vmin);
-  color: white;
+  z-index: 1000;
 }
 
 .App-link {

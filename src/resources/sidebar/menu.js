@@ -1,7 +1,7 @@
 import './menu.css';
 import icono from '../Images/logo512.png';
 
-import { FaShoppingBag, FaBoxes, FaSignOutAlt, FaUsers, FaWallet, FaMoneyBillWave, FaFileInvoice, FaFlask, FaLeaf } from 'react-icons/fa';
+import { FaShoppingBag, FaBoxes, FaSignOutAlt, FaUsers, FaWallet, FaMoneyBillWave, FaFileInvoice, FaFlask, FaLeaf, FaTruck } from 'react-icons/fa';
 
 export default function Menu({ onSelect, onLogout, loading, rol }) {
   return (
@@ -20,6 +20,11 @@ export default function Menu({ onSelect, onLogout, loading, rol }) {
           <FaMoneyBillWave className="icon" />
           <span className="label">Flujo</span>
         </button>
+          <button onClick={() => onSelect('pedidos')} title="Hacer pedido">
+            <FaTruck className="icon" />
+            <span className="label">Pedido</span>
+          </button>
+      
 
         {rol === 'ADMINISTRADOR' && (
           <>
