@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, setDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, getDocs, setDoc, doc, serverTimestamp, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../server/firebase';
 import { toast } from 'react-toastify';
 import { FaPlus, FaTrash } from 'react-icons/fa';
@@ -23,6 +23,8 @@ export default function PedidosReabastecer() {
   const [orders, setOrders] = useState([]);
   const [variantPrompt, setVariantPrompt] = useState({ visible: false, esencias: [] });
   const [selectedArrived, setSelectedArrived] = useState({});
+  const [receivedPage, setReceivedPage] = useState(1);
+  const ordersPerPage = 5;
 
   useEffect(() => {
     // load data depending on mode
@@ -69,22 +71,20 @@ export default function PedidosReabastecer() {
   const handleAddToOrder = (item) => {
     const exists = orderItems.find(i => i.key === (item.documentId || item.id));
     if (exists) {
-      setOrderItems(prev => prev.map(i => i.key === exists.key ? { ...i, quantity: i.quantity + 1 } : i));
+      setOrderItems(prev => prev.map(i => i.key === exists.key ? { ...i, quantity: String(parseInt(exists.quantity || 0) + 1) } : i));
     } else {
-      setOrderItems(prev => [...prev, { key: item.documentId || item.id, category, id: item.id || '', name: item.name || '', quantity: 1, documentId: item.documentId }]);
+      setOrderItems(prev => [...prev, { key: item.documentId || item.id, category, id: item.id || '', name: item.name || '', quantity: '1', documentId: item.documentId, genero: item.genero || '' }]);
     }
   };
 
   const handleQuantityChange = (key, delta) => {
     setOrderItems(prev => prev
-      .map(i => i.key === key ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i)
-      .filter(i => i.quantity > 0));
+      .map(i => i.key === key ? { ...i, quantity: String(Math.max(0, parseInt(i.quantity || 0) + delta)) } : i)
+      .filter(i => parseInt(i.quantity || 0) > 0));
   };
 
   const handleQuantityInput = (key, value) => {
-    const qty = parseInt(value, 10);
-    if (isNaN(qty) || qty < 1) return;
-    setOrderItems(prev => prev.map(i => i.key === key ? { ...i, quantity: qty } : i));
+    setOrderItems(prev => prev.map(i => i.key === key ? { ...i, quantity: value } : i));
   };
 
   const toggleArrival = (orderId, idx) => {
@@ -94,23 +94,32 @@ export default function PedidosReabastecer() {
     }));
   };
 
+  const formatOrderDate = (orderId) => {
+    const parts = orderId.split('-');
+    const day = parts[0], month = parts[1], year = parts[2];
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
   const downloadOrderPdf = (order) => {
     const docPdf = new jsPDF();
     docPdf.setFontSize(16);
-    docPdf.text(`Pedido ${order.documentId}`, 10, 20);
+    docPdf.text(`Pedido ${formatOrderDate(order.documentId)}`, 10, 20);
     docPdf.setFontSize(12);
     let y = 30;
     docPdf.text('Categoria', 10, y);
-    docPdf.text('Nombre', 70, y);
-    docPdf.text('Cantidad', 150, y);
+    docPdf.text('Nombre', 50, y);
+    docPdf.text('Género', 120, y);
+    docPdf.text('Cantidad', 160, y);
     y += 8;
     docPdf.setLineWidth(0.5);
     docPdf.line(10, y, 200, y);
     y += 5;
     (order.items || []).forEach(it => {
       docPdf.text(it.category, 10, y);
-      docPdf.text(it.name, 70, y);
-      docPdf.text(String(it.quantity), 150, y);
+      docPdf.text(it.name, 50, y);
+      docPdf.text(it.genero || '', 120, y);
+      docPdf.text(String(it.quantity), 160, y);
       y += 8;
     });
     docPdf.save(`pedido_${order.documentId}.pdf`);
@@ -199,9 +208,11 @@ export default function PedidosReabastecer() {
       setLoading(true);
       const snap = await getDocs(collection(db, 'PEDIDOS'));
       const list = snap.docs.map(d => ({ documentId: d.id, ...d.data() }));
-      // keep full list, rendering handles pending vs received
+      // sort by createdAt descending
+      list.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
       setOrders(list);
       setSelectedArrived({}); // clear any previous checkbox state
+      setReceivedPage(1); // reset to first page
     } catch (err) {
       console.error('Error cargando pedidos:', err);
       toast.error('Error al cargar pedidos');
@@ -257,6 +268,20 @@ export default function PedidosReabastecer() {
     }
   };
 
+  const deleteOrder = async (orderId) => {
+    try {
+      setLoading(true);
+      await deleteDoc(doc(db, 'PEDIDOS', orderId));
+      toast.success('Pedido eliminado correctamente');
+      loadOrders();
+    } catch (err) {
+      console.error('Error eliminando pedido:', err);
+      toast.error('Error al eliminar pedido');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const addNewToOrder = async () => {
     const { category: cat, id, name, genero } = newItemData;
     if (!name || !id) {
@@ -272,7 +297,7 @@ export default function PedidosReabastecer() {
     if (exists) {
       setOrderItems(prev => prev.map(i => i.key === key ? { ...i, quantity: i.quantity + 1 } : i));
     } else {
-      setOrderItems(prev => [...prev, { key, category: cat, id, name, quantity: 1, isNew: true, genero: cat === 'ESENCIA' ? genero : undefined }]);
+      setOrderItems(prev => [...prev, { key, category: cat, id, name, quantity: '1', isNew: true, genero: cat === 'ESENCIA' ? genero : undefined }]);
       // no generamos variantes hasta que la esencia se cree en la base de datos (al guardar pedido)
     }
     setShowNewModal(false);
@@ -318,15 +343,15 @@ export default function PedidosReabastecer() {
         setVariantPrompt({ visible: true, esencias: payload });
       }
 
-      // generar id formato dd-mm-yyyy
+      // generar id formato dd-mm-yyyy-hh-mm-ss
       const date = new Date();
       const orderId = `${String(date.getDate()).padStart(2, '0')}-${String(
         date.getMonth() + 1
-      ).padStart(2, '0')}-${date.getFullYear()}`;
+      ).padStart(2, '0')}-${date.getFullYear()}-${String(date.getHours()).padStart(2, '0')}-${String(date.getMinutes()).padStart(2, '0')}-${String(date.getSeconds()).padStart(2, '0')}`;
 
       // guardar pedido usando setDoc para controlar el id
       await setDoc(doc(db, 'PEDIDOS', orderId), {
-        items: orderItems.map(i => ({ category: i.category, id: i.id, name: i.name, quantity: i.quantity })),
+        items: orderItems.map(i => ({ category: i.category, id: i.id, name: i.name, quantity: parseInt(i.quantity || 0), genero: i.genero || '' })),
         createdAt: serverTimestamp()
       });
 
@@ -416,7 +441,7 @@ export default function PedidosReabastecer() {
               <div className="prc-orders-list">
                 {orders.filter(o => !o.received).map(o => (
                   <div key={o.documentId} className="prc-order-entry">
-                    <strong>{o.documentId}</strong>
+                    <strong>{formatOrderDate(o.documentId)}</strong>
                     <ul>
                       {o.items && o.items.map((it, idx) => (
                         <li key={idx}>
@@ -426,7 +451,8 @@ export default function PedidosReabastecer() {
                             checked={selectedArrived[o.documentId]?.[idx] || false}
                             onChange={() => toggleArrival(o.documentId, idx)}
                           />
-                          {it.category} - {it.name} <strong>cantidad {it.quantity}</strong>
+{it.category} - {it.name} {it.genero ? `-${it.genero}-` : ''} &nbsp;&nbsp;&nbsp;
+<strong>Cantidad {it.quantity}</strong>
                         </li>
                       ))}
                     </ul>
@@ -435,6 +461,12 @@ export default function PedidosReabastecer() {
                       onClick={() => confirmOrder(o.documentId)}
                     >
                       Confirmar
+                    </button>
+                    <button
+                      className="prc-btn-delete-receive"
+                      onClick={() => deleteOrder(o.documentId)}
+                    >
+                      Eliminar
                     </button>
                     <button
                       className="prc-btn prc-btn-secondary prc-pdf-btn"
@@ -453,24 +485,52 @@ export default function PedidosReabastecer() {
             <>
               <h3>Pedidos recibidos</h3>
               <div className="prc-orders-list prc-orders-received">
-                {orders.filter(o => o.received).map(o => (
-                  <div key={o.documentId} className="prc-order-entry received">
-                    <strong>{o.documentId}</strong>
-                    <ul>
-                      {o.arrived && o.arrived.map((it, idx) => (
-                        <li key={idx}>
-                          {it.category} - {it.name} <strong>cantidad {it.quantity}</strong>
-                        </li>
+                {(() => {
+                  const receivedOrders = orders.filter(o => o.received);
+                  const totalPages = Math.ceil(receivedOrders.length / ordersPerPage);
+                  const displayedReceived = receivedOrders.slice((receivedPage - 1) * ordersPerPage, receivedPage * ordersPerPage);
+                  return (
+                    <>
+                      {displayedReceived.map(o => (
+                        <div key={o.documentId} className="prc-order-entry received">
+                          <strong>{formatOrderDate(o.documentId)}</strong>
+                          <ul>
+                            {o.arrived && o.arrived.map((it, idx) => (
+                              <li key={idx}>
+                                {it.category} - {it.name} {it.genero ? `(${it.genero})` : ''} <strong>cantidad {it.quantity}</strong>
+                              </li>
+                            ))}
+                          </ul>
+                          <button
+                            className="prc-btn prc-btn-secondary prc-pdf-btn"
+                            onClick={() => downloadOrderPdf(o)}
+                          >
+                            PDF
+                          </button>
+                        </div>
                       ))}
-                    </ul>
-                    <button
-                      className="prc-btn prc-btn-secondary prc-pdf-btn"
-                      onClick={() => downloadOrderPdf(o)}
-                    >
-                      PDF
-                    </button>
-                  </div>
-                ))}
+                      {totalPages > 1 && (
+                        <div className="prc-pagination">
+                          <button
+                            className="prc-btn prc-btn-secondary"
+                            disabled={receivedPage === 1}
+                            onClick={() => setReceivedPage(receivedPage - 1)}
+                          >
+                            Anterior
+                          </button>
+                          <span>Página {receivedPage} de {totalPages}</span>
+                          <button
+                            className="prc-btn prc-btn-secondary"
+                            disabled={receivedPage === totalPages}
+                            onClick={() => setReceivedPage(receivedPage + 1)}
+                          >
+                            Siguiente
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </>
           )}
@@ -485,41 +545,46 @@ export default function PedidosReabastecer() {
           {orderItems.length === 0 ? (
             <p>No hay items agregados</p>
           ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Categoria</th>
-                  <th>ID / Nombre</th>
-                  <th>Cantidad</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orderItems.map(i => (
-                  <tr key={i.key}>
-                    <td>{i.category}</td>
-                    <td>{i.name || i.id}</td>
-                    <td className="prc-qty-cell">
-                      <button className="prc-btn prc-btn-secondary prc-qty-btn" onClick={() => handleQuantityChange(i.key, -1)}>-</button>
-                      <input
-                        className="prc-qty-input"
-                        type="number"
-                        min="1"
-                        value={i.quantity}
-                        onChange={e => handleQuantityInput(i.key, e.target.value)}
-                      />
-                      {(i.category === 'ESENCIA' || i.category === 'INSUMOS') ? ' gr' : ''}
-                      <button className="prc-btn prc-btn-secondary prc-qty-btn" onClick={() => handleQuantityChange(i.key, 1)}>+</button>
-                    </td>
-                    <td>
-                      <button onClick={() => handleRemoveOrderItem(i.key)} className="prc-btn-delete">
-                        <FaTrash />
-                      </button>
-                    </td>
+            <div className="prc-table-wrapper">
+              <table className="prc-table-fixed">
+                <thead>
+                  <tr>
+                    <th>Categoria</th>
+                    <th>ID / Nombre</th>
+                    <th>Género</th>
+                    <th>Cantidad</th>
+                    <th>Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {orderItems.map(i => (
+                    <tr key={i.key}>
+                      <td>{i.category}</td>
+                      <td>{i.name || i.id}</td>
+                      <td>{i.category === 'ESENCIA' ? i.genero : ''}</td>
+                      <td>
+                        <div className="prc-qty-cell">
+                          <button className="prc-btn prc-btn-secondary prc-qty-btn" onClick={() => handleQuantityChange(i.key, -1)}>-</button>
+                          <input
+                            className="prc-qty-input"
+                            type="number"
+                            value={i.quantity}
+                            onChange={e => handleQuantityInput(i.key, e.target.value)}
+                          />
+                          <span className="prc-qty-unit">{(i.category === 'ESENCIA' || i.category === 'INSUMOS') ? 'gr' : ''}</span>
+                          <button className="prc-btn prc-btn-secondary prc-qty-btn" onClick={() => handleQuantityChange(i.key, 1)}>+</button>
+                        </div>
+                      </td>
+                      <td>
+                        <button onClick={() => handleRemoveOrderItem(i.key)} className="prc-btn-delete-create">
+                            <FaTrash />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
           )}
           {orderItems.length > 0 && (
             <button onClick={saveOrder} className="prc-btn prc-btn-success" disabled={loading}>
