@@ -471,8 +471,11 @@ export default function Inventario({ onAgregarAlCarrito }) {
 			category: envase.category,
 			price: precioEnvase,
 			cantidad: 1,
+			isEnvase: true,
 			isRefill: !!isRefill,
-			refillFrom: isRefill ? productoSeleccionado.name : null
+			refillFrom: isRefill ? productoSeleccionado.name : null,
+			parentProductId: productoSeleccionado.documentId,
+			parentProductName: productoSeleccionado.name
 		};
 
 		// Agregar envase con pequeño retardo para evitar conflictos

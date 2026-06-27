@@ -11,6 +11,29 @@ const Carrito = forwardRef((props, ref) => {
   const [mostrarPago, setMostrarPago] = useState(false);
   const [cajaAbierta, setCajaAbierta] = useState(false);
 
+  const getItemIdentityKey = (item = {}) => {
+    const tipo = item.isRefill
+      ? 'refill'
+      : item.isEnvase
+        ? 'envase'
+        : item.isDescuento
+          ? 'descuento'
+          : item.isAdicional
+            ? 'adicional'
+            : 'producto';
+
+    const baseId = item.documentId || item.id || 'sin-id';
+    const variante = [
+      item.refillFrom || '',
+      item.idFormula || '',
+      item.idEsencia || '',
+      item.category || '',
+      item.name || ''
+    ].join('|');
+
+    return `${tipo}:${baseId}:${variante}`;
+  };
+
   const fechaHoyId = () => {
     const d = new Date();
     const dd = String(d.getDate()).padStart(2, '0');
@@ -41,78 +64,76 @@ const Carrito = forwardRef((props, ref) => {
 
   useImperativeHandle(ref, () => ({
     agregarAlCarrito: (producto) => {
-      // Si el producto viene con gramos de esencia, sumar por idEsencia
+      const itemBase = {
+        ...producto,
+        cantidad: 1,
+        idFormula: producto.idFormula || null,
+        idEsencia: producto.idEsencia || null
+      };
+
       if (producto.esenciaGramos) {
-        const exist = carrito.find(item => item.documentId === producto.documentId && item.idEsencia === producto.idEsencia);
-        if (exist) {
-          setCarrito(carrito.map(item =>
-            (item.documentId === producto.documentId && item.idEsencia === producto.idEsencia)
-              ? { ...item, esenciaGramos: Number(item.esenciaGramos || 0) + Number(producto.esenciaGramos || 0) }
-              : item
-          ));
-        } else {
-          setCarrito([...carrito, { 
-            ...producto,
-            esenciaGramos: Number(producto.esenciaGramos || 0),
-            cantidad: 1,
-            idFormula: producto.idFormula || null,
-            idEsencia: producto.idEsencia || null
-          }]);
-        }
+        setCarrito((prev) => {
+          const itemKey = getItemIdentityKey(itemBase);
+          const exist = prev.find((item) => getItemIdentityKey(item) === itemKey);
+
+          if (exist) {
+            return prev.map((item) =>
+              getItemIdentityKey(item) === itemKey
+                ? { ...item, esenciaGramos: Number(item.esenciaGramos || 0) + Number(producto.esenciaGramos || 0) }
+                : item
+            );
+          }
+
+          return [...prev, {
+            ...itemBase,
+            esenciaGramos: Number(producto.esenciaGramos || 0)
+          }];
+        });
         return;
       }
 
-      // Comportamiento normal para productos sin esencia (por unidades)
-      const itemExistente = carrito.find(item => item.documentId === producto.documentId && !item.esenciaGramos);
-      
-      if (itemExistente) {
-        setCarrito(carrito.map(item =>
-          item.documentId === producto.documentId && !item.esenciaGramos
-            ? { ...item, cantidad: item.cantidad + 1 }
-            : item
-        ));
-      } else {
-        setCarrito([...carrito, { 
-          ...producto, 
-          cantidad: 1,
-          idFormula: producto.idFormula || null,
-          idEsencia: producto.idEsencia || null
-        }]);
-      }
+      setCarrito((prev) => {
+        const itemKey = getItemIdentityKey(itemBase);
+        const itemExistente = prev.find((item) => getItemIdentityKey(item) === itemKey);
+
+        if (itemExistente) {
+          return prev.map((item) =>
+            getItemIdentityKey(item) === itemKey
+              ? { ...item, cantidad: Number(item.cantidad || 0) + 1 }
+              : item
+          );
+        }
+
+        return [...prev, itemBase];
+      });
     }
   }));
 
-  const eliminarDelCarrito = (documentId, idEsencia = null) => {
-    if (idEsencia) {
-      setCarrito(carrito.filter(item => !(item.documentId === documentId && item.idEsencia === idEsencia)));
-    } else {
-      // Eliminar el producto por unidades (no tocar entradas de esencias específicas)
-      setCarrito(carrito.filter(item => !(item.documentId === documentId && !item.esenciaGramos)));
-    }
+  const eliminarDelCarrito = (itemSeleccionado) => {
+    if (!itemSeleccionado) return;
+
+    const itemKey = getItemIdentityKey(itemSeleccionado);
+    setCarrito((prev) => prev.filter((item) => getItemIdentityKey(item) !== itemKey));
   };
 
-  const modificarCantidad = (documentId, nuevaCantidad, idEsencia = null) => {
-    if (idEsencia) {
-      if (nuevaCantidad <= 0) {
-        eliminarDelCarrito(documentId, idEsencia);
-      } else {
-        setCarrito(carrito.map(item =>
-          (item.documentId === documentId && item.idEsencia === idEsencia)
-            ? { ...item, esenciaGramos: Number(nuevaCantidad) }
-            : item
-        ));
-      }
-    } else {
-      if (nuevaCantidad <= 0) {
-        eliminarDelCarrito(documentId);
-      } else {
-        setCarrito(carrito.map(item =>
-          item.documentId === documentId && !item.esenciaGramos
-            ? { ...item, cantidad: nuevaCantidad }
-            : item
-        ));
-      }
+  const modificarCantidad = (itemSeleccionado, nuevaCantidad) => {
+    if (!itemSeleccionado) return;
+
+    const itemKey = getItemIdentityKey(itemSeleccionado);
+
+    if (nuevaCantidad <= 0) {
+      eliminarDelCarrito(itemSeleccionado);
+      return;
     }
+
+    setCarrito((prev) => prev.map((item) =>
+      getItemIdentityKey(item) === itemKey
+        ? {
+            ...item,
+            ...(item.esenciaGramos ? { esenciaGramos: Number(nuevaCantidad) } : { cantidad: Number(nuevaCantidad) })
+          }
+        : item
+    ));
   };
 
   const calcularTotal = (item) => {
@@ -160,36 +181,36 @@ const Carrito = forwardRef((props, ref) => {
           {carrito.length === 0 ? (
             <p className="carrito-vacio">Sin artículos</p>
           ) : (
-            carrito.map((item) => (
-              <div key={item.documentId} className="carrito-item">
+            carrito.map((item, index) => (
+              <div key={`${getItemIdentityKey(item)}-${index}`} className="carrito-item">
                 <span className="col-id">{item.id}</span>
                 <span className="col-nombre">{item.name}</span>
                 {item.esenciaGramos ? (
                   <div className="col-cantidad item-cantidad">
-                    <button onClick={() => modificarCantidad(item.documentId, Math.max(Number(item.esenciaGramos) - 1, 0), item.idEsencia)}>-</button>
+                    <button onClick={() => modificarCantidad(item, Math.max(Number(item.esenciaGramos) - 1, 0))}>-</button>
                     <input
                       type="number"
                       value={item.esenciaGramos}
-                      onChange={(e) => modificarCantidad(item.documentId, parseInt(e.target.value) || 0, item.idEsencia)}
+                      onChange={(e) => modificarCantidad(item, parseInt(e.target.value) || 0)}
                     />
-                    <button onClick={() => modificarCantidad(item.documentId, Number(item.esenciaGramos) + 1, item.idEsencia)}>+</button>
+                    <button onClick={() => modificarCantidad(item, Number(item.esenciaGramos) + 1)}>+</button>
                   </div>
                 ) : (
                   <div className="col-cantidad item-cantidad">
-                    <button onClick={() => modificarCantidad(item.documentId, item.cantidad - 1)}>-</button>
+                    <button onClick={() => modificarCantidad(item, item.cantidad - 1)}>-</button>
                     <input 
                       type="number" 
                       value={item.cantidad}
-                      onChange={(e) => modificarCantidad(item.documentId, parseInt(e.target.value) || 1)}
+                      onChange={(e) => modificarCantidad(item, parseInt(e.target.value) || 1)}
                     />
-                    <button onClick={() => modificarCantidad(item.documentId, item.cantidad + 1)}>+</button>
+                    <button onClick={() => modificarCantidad(item, item.cantidad + 1)}>+</button>
                   </div>
                 )}
                 <span className="col-valor">{item.esenciaGramos ? `${formatearPrecio(item.price)}/g` : `$${formatearPrecio(item.price)}`}</span>
                 <span className="col-total">${formatearPrecio(calcularTotal(item))}</span>
                 <button 
                   className="btn-eliminar"
-                  onClick={() => eliminarDelCarrito(item.documentId, item.idEsencia)}
+                  onClick={() => eliminarDelCarrito(item)}
                 >
                   ✕
                 </button>
