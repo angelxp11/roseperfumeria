@@ -23,6 +23,30 @@
   font-size: 1.5rem;
 }
 
+.flujo-fecha {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.flujo-fecha input {
+  padding: 7px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font: inherit;
+}
+
+@media (max-width: 768px) {
+  .flujo-fecha {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+}
+
 .flujo-buttons-main {
   display: flex;
   gap: 16px;
@@ -60,6 +84,43 @@
 .flujo-buttons-main button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.movimientos-recientes {
+  margin-top: 8px;
+  margin-bottom: 28px;
+  color: var(--color-text);
+}
+
+.movimientos-recientes h3 {
+  margin: 0 0 12px;
+  color: var(--color-primary);
+}
+
+.movimientos-recientes > p {
+  margin: 0;
+  color: var(--color-secondary);
+}
+
+.movimiento-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-left: 4px solid var(--color-primary);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.movimiento-item span {
+  overflow-wrap: anywhere;
+}
+
+.movimiento-item time {
+  flex-shrink: 0;
+  color: var(--color-secondary);
+  font-size: 0.9rem;
 }
 
 .flujo-btn-icon {

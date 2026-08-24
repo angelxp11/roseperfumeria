@@ -7,12 +7,14 @@ import 'react-toastify/dist/ReactToastify.css';
 import { FaMoneyBillWave, FaArrowUp, FaArrowDown, FaExchangeAlt } from 'react-icons/fa';
 import './Ingresoandegreso.css';
 
-function getFechaHoyId() {
-  const d = new Date();
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
+function getFechaId(fecha) {
+  const [yyyy, mm, dd] = fecha.split('-');
   return `${dd}_${mm}_${yyyy}`;
+}
+
+function getFechaLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function formatNumber(val) {
@@ -43,6 +45,8 @@ export default function Flujo() {
   const [balances, setBalances] = useState({});
   const [cajaBalances, setCajaBalances] = useState({});
   const [loading, setLoading] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(getFechaLocal);
+  const [movimientosRecientes, setMovimientosRecientes] = useState([]);
 
   // Form states
   const [metodo, setMetodo] = useState('');
@@ -55,7 +59,17 @@ export default function Flujo() {
 
   useEffect(() => {
     fetchPaymentMethods();
-  }, []);
+  }, [selectedDate]);
+
+  const fetchMovimientos = async () => {
+    const movimientosRef = doc(db, 'MOVIMIENTOS', getFechaId(selectedDate));
+    const movimientosSnap = await getDoc(movimientosRef);
+    const movimientos = movimientosSnap.exists()
+      ? Object.entries(movimientosSnap.data()).map(([id, movimiento]) => ({ id, ...movimiento }))
+      : [];
+    movimientos.sort((a, b) => new Date(b.momento) - new Date(a.momento));
+    setMovimientosRecientes(movimientos.slice(0, 10));
+  };
 
   const fetchPaymentMethods = async () => {
     setLoading(true);
@@ -74,7 +88,7 @@ export default function Flujo() {
     setBalances(balancesMap);
 
     // Obtener saldos desde CAJAS (fecha de hoy)
-    const fechaHoyId = getFechaHoyId();
+    const fechaHoyId = getFechaId(selectedDate);
     const cajaRef = doc(db, 'CAJAS', fechaHoyId);
     const cajaSnap = await getDoc(cajaRef);
     const cajaData = cajaSnap.exists() ? cajaSnap.data() : {};
@@ -95,6 +109,7 @@ export default function Flujo() {
       setToMethod(methods[1].name);
     }
     setLoading(false);
+    fetchMovimientos();
   };
 
   // --- INGRESO ---
@@ -110,7 +125,7 @@ export default function Flujo() {
     setLoading(true);
     try {
       // Update CAJAS (el flujo administra la caja del día, no PAYMENT)
-      const fechaHoyId = getFechaHoyId();
+      const fechaHoyId = getFechaId(selectedDate);
       const cajaRef = doc(db, 'CAJAS', fechaHoyId);
       const cajaSnap = await getDoc(cajaRef);
       const cajaData = cajaSnap.exists() ? cajaSnap.data() : {};
@@ -162,7 +177,7 @@ export default function Flujo() {
     }
 
     // Verificar saldo en CAJAS
-    const fechaHoyId = getFechaHoyId();
+    const fechaHoyId = getFechaId(selectedDate);
     const cajaRef = doc(db, 'CAJAS', fechaHoyId);
     const cajaSnap = await getDoc(cajaRef);
     const cajaData = cajaSnap.exists() ? cajaSnap.data() : {};
@@ -227,7 +242,7 @@ export default function Flujo() {
     }
 
     // Verificar saldo en CAJAS
-    const fechaHoyId = getFechaHoyId();
+    const fechaHoyId = getFechaId(selectedDate);
     const cajaRef = doc(db, 'CAJAS', fechaHoyId);
     const cajaSnap = await getDoc(cajaRef);
     const cajaData = cajaSnap.exists() ? cajaSnap.data() : {};
@@ -292,6 +307,14 @@ export default function Flujo() {
       <div className="flujo-header-main">
         <FaMoneyBillWave className="flujo-header-icon-main" />
         <h2>Flujo de Dinero</h2>
+        <label className="flujo-fecha">
+          Fecha de operación
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+          />
+        </label>
       </div>
 
       <div className="flujo-buttons-main">
@@ -317,6 +340,22 @@ export default function Flujo() {
           <span>Transferir Dinero</span>
         </button>
       </div>
+
+      <section className="movimientos-recientes">
+        <h3>Movimientos recientes</h3>
+        {movimientosRecientes.length === 0 ? (
+          <p>No hay movimientos para esta fecha.</p>
+        ) : (
+          movimientosRecientes.map(movimiento => (
+            <article className="movimiento-item" key={movimiento.id}>
+              <span>{movimiento.descripcion}</span>
+              <time dateTime={movimiento.momento}>
+                {new Date(movimiento.momento).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+              </time>
+            </article>
+          ))
+        )}
+      </section>
 
       {/* Modal Ingreso */}
       {modal === 'ingreso' && (

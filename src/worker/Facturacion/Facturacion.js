@@ -8,7 +8,17 @@ import './Facturacion.css';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../server/firebase';
 
+const fechaIdDesdeInput = (fecha) => {
+  const [yyyy, mm, dd] = fecha.split('-');
+  return `${dd}_${mm}_${yyyy}`;
+};
+
 export default function Facturacion() {
+  const obtenerFechaLocal = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
   const carritoRef = useRef(null);
   const [isCajaOpen, setIsCajaOpen] = useState(false);
   const [cajaMode, setCajaMode] = useState('open'); // 'open' or 'close'
@@ -16,18 +26,11 @@ export default function Facturacion() {
   const [cierreActive, setCierreActive] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showReporteModal, setShowReporteModal] = useState(false);
-
-  const fechaHoyId = () => {
-    const d = new Date();
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const yyyy = d.getFullYear();
-    return `${dd}_${mm}_${yyyy}`;
-  };
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(obtenerFechaLocal);
 
   useEffect(() => {
     const verificarCaja = async () => {
-      const id = fechaHoyId();
+      const id = fechaIdDesdeInput(fechaSeleccionada);
       const ref = doc(db, 'CAJAS', id);
       const snap = await getDoc(ref);
       if (snap.exists()) {
@@ -42,9 +45,11 @@ export default function Facturacion() {
       setIsAdmin(userRole === 'ADMINISTRADOR');
     };
     
+    setAperturaActive(false);
+    setCierreActive(false);
     verificarCaja();
     verificarRol();
-  }, []);
+  }, [fechaSeleccionada]);
 
   const handleCierreClick = (e) => {
     if (isAdmin && e.ctrlKey) {
@@ -66,6 +71,14 @@ export default function Facturacion() {
     <div className="facturacion-container">
       <div className="facturacion-header">
         <h2><FaShoppingBag /> Ventas</h2>
+        <label className="fecha-facturacion">
+          Fecha de facturación
+          <input
+            type="date"
+            value={fechaSeleccionada}
+            onChange={(e) => setFechaSeleccionada(e.target.value)}
+          />
+        </label>
         <div className="caja-buttons">
           {isAdmin && (
             <button
@@ -96,13 +109,14 @@ export default function Facturacion() {
       </div>
 
       <div className="facturacion-content">
-        <Carrito ref={carritoRef} />
+        <Carrito ref={carritoRef} selectedDate={fechaSeleccionada} />
         <Inventario onAgregarAlCarrito={handleAgregarAlCarrito} />
       </div>
 
       {isCajaOpen && (
         <Cajas
           mode={cajaMode}
+          selectedDate={fechaSeleccionada}
           onClose={() => setIsCajaOpen(false)}
           onOpened={() => {
             setAperturaActive(true);

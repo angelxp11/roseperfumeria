@@ -18,7 +18,20 @@ import { db } from '../../../../server/firebase';
 import Carga from '../../../../resources/Carga/Carga';
 import './metododepago.css';
 
-export default function MetodoDePago({ total, onClose, onCompletarCompra, items = [] }) {
+const fechaIdDesdeInput = (fecha) => {
+  const [yyyy, mm, dd] = fecha.split('-');
+  return `${dd}_${mm}_${yyyy}`;
+};
+
+const fechaFacturaDesdeInput = (fecha) => {
+  const [yyyy, mm, dd] = fecha.split('-');
+  const ahora = new Date();
+  const fechaFactura = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+  fechaFactura.setHours(ahora.getHours(), ahora.getMinutes(), ahora.getSeconds(), ahora.getMilliseconds());
+  return fechaFactura.toISOString();
+};
+
+export default function MetodoDePago({ total, onClose, onCompletarCompra, items = [], selectedDate }) {
   const [metodoSeleccionado, setMetodoSeleccionado] = useState('efectivo');
   const [montoEntregado, setMontoEntregado] = useState('');
   const [cuentaTransferencia, setCuentaTransferencia] = useState(null);
@@ -292,14 +305,6 @@ const descontarInsumosPorFormula = async (items = []) => {
   const calcularVuelto = () => Number(montoEntregado || 0) - total;
   const calcularMontoSegundo = () => total - Number(metodos.montoPrimero || 0);
 
-  const fechaHoyId = () => {
-    const d = new Date();
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const yyyy = d.getFullYear();
-    return `${dd}_${mm}_${yyyy}`;
-  };
-
   const obtenerClaveCaja = (docId) => {
     const p = metodosPago.find(m => m.docId === docId);
     if (!p) return 'TRANSFERENCIA';
@@ -315,7 +320,7 @@ const descontarInsumosPorFormula = async (items = []) => {
   };
 
   const incrementarCaja = async (clave, monto) => {
-		const id = fechaHoyId();
+    const id = fechaIdDesdeInput(selectedDate);
 		const ref = doc(db, 'CAJAS', id);
 		await setDoc(ref, { 
 			APERTURA: {
@@ -326,8 +331,7 @@ const descontarInsumosPorFormula = async (items = []) => {
 
   const crearFactura = async (metodo, montoTotal, detalleMetodos) => {
   try {
-    const fechaHoyId_val = fechaHoyId();
-    const facturaRef = doc(db, 'FACTURAS', fechaHoyId_val);
+    const facturaRef = doc(db, 'FACTURAS', fechaIdDesdeInput(selectedDate));
     const facturaId = String(Date.now());
 
     const productosDetalles = items
@@ -350,7 +354,7 @@ const descontarInsumosPorFormula = async (items = []) => {
       .filter(p => p.nombre && p.cantidad > 0);
 
     const facturaObj = {
-      fecha: new Date().toISOString(),
+      fecha: fechaFacturaDesdeInput(selectedDate),
       productos: productosDetalles.length > 0 ? productosDetalles : [],
       total: montoTotal || 0,
       metodo_pago: detalleMetodos && typeof detalleMetodos === 'object' ? detalleMetodos : {},

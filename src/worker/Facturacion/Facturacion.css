@@ -37,6 +37,21 @@
   color: var(--color-primary);
 }
 
+.fecha-facturacion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.fecha-facturacion input {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font: inherit;
+}
+
 .caja-buttons {
   display: flex;
   gap: 10px;
@@ -107,6 +122,11 @@
     flex-direction: column;
     gap: 15px;
     padding: 10px;
+  }
+
+  .fecha-facturacion {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .facturacion-header h2 {

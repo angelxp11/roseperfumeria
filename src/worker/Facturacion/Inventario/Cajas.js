@@ -5,7 +5,17 @@ import { db } from '../../../server/firebase';
 import { getAuth } from 'firebase/auth';
 import './Cajas.css';
 
-export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
+const fechaIdDesdeInput = (fecha) => {
+	const [yyyy, mm, dd] = fecha.split('-');
+	return `${dd}_${mm}_${yyyy}`;
+};
+
+const fechaVisibleDesdeInput = (fecha) => {
+	const [yyyy, mm, dd] = fecha.split('-');
+	return new Date(Number(yyyy), Number(mm) - 1, Number(dd)).toLocaleDateString();
+};
+
+export default function Cajas({ onClose, onOpened, onClosed, mode = 'open', selectedDate }) {
 	const [efectivo, setEfectivo] = useState('');
 	const [transferencia, setTransferencia] = useState('');
 	// Métodos relevantes (type EFECTIVO | TRANSFERENCIA) y inputs por método (apertura)
@@ -17,14 +27,6 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 	const [denomCounts, setDenomCounts] = useState(() => ({}));
 	const [metodosTotales, setMetodosTotales] = useState({ EFECTIVO: 0, TRANSFERENCIA: 0 });
 	const [foundMetodos, setFoundMetodos] = useState({ EFECTIVO: '', TRANSFERENCIA: '' });
-
-	const fechaHoyId = () => {
-		const d = new Date();
-		const dd = String(d.getDate()).padStart(2, '0');
-		const mm = String(d.getMonth() + 1).padStart(2, '0');
-		const yyyy = d.getFullYear();
-		return `${dd}_${mm}_${yyyy}`;
-	};
 
 	const formatNumber = val =>
 		new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(Number(val) || 0);
@@ -63,7 +65,7 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 	// load existing CAJAS doc
 	useEffect(() => {
 		const cargarCaja = async () => {
-			const id = fechaHoyId();
+			const id = fechaIdDesdeInput(selectedDate);
 			const ref = doc(db, 'CAJAS', id);
 			const snap = await getDoc(ref);
 			// cargar métodos de pago relevantes
@@ -105,7 +107,7 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 			}
 		};
 		cargarCaja();
-	}, [mode]);
+	 }, [mode, selectedDate]);
 
 	const obtenerNombreEmpleado = async () => {
 		try {
@@ -137,7 +139,7 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 	const abrirCaja = async () => {
 		try {
 			setLoading(true);
-			const id = fechaHoyId();
+			const id = fechaIdDesdeInput(selectedDate);
 			const ref = doc(db, 'CAJAS', id);
 			const movRef = doc(db, 'MOVIMIENTOS', id);
 
@@ -237,7 +239,7 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 	const cerrarCaja = async () => {
 		try {
 			setLoading(true);
-			const id = fechaHoyId();
+			const id = fechaIdDesdeInput(selectedDate);
 			const ref = doc(db, 'CAJAS', id);
 			const movRef = doc(db, 'MOVIMIENTOS', id);
 
@@ -323,7 +325,7 @@ export default function Cajas({ onClose, onOpened, onClosed, mode = 'open' }) {
 	return (
 		<div className="overlay">
 			<div className="modal-caja">
-				<h3>{mode === 'open' ? `Apertura de Caja - ${new Date().toLocaleDateString()}` : `Cierre de Caja - ${new Date().toLocaleDateString()}`}</h3>
+				<h3>{mode === 'open' ? `Apertura de Caja - ${fechaVisibleDesdeInput(selectedDate)}` : `Cierre de Caja - ${fechaVisibleDesdeInput(selectedDate)}`}</h3>
 
 				{mode === 'open' && (
 					<>

@@ -6,7 +6,12 @@ import { db } from '../../../server/firebase';
 import MetodoDePago from './metodopago/metododepago';
 import './carrito.css';
 
-const Carrito = forwardRef((props, ref) => {
+const fechaIdDesdeInput = (fecha) => {
+  const [yyyy, mm, dd] = fecha.split('-');
+  return `${dd}_${mm}_${yyyy}`;
+};
+
+const Carrito = forwardRef(({ selectedDate }, ref) => {
   const [carrito, setCarrito] = useState([]);
   const [mostrarPago, setMostrarPago] = useState(false);
   const [cajaAbierta, setCajaAbierta] = useState(false);
@@ -34,17 +39,9 @@ const Carrito = forwardRef((props, ref) => {
     return `${tipo}:${baseId}:${variante}`;
   };
 
-  const fechaHoyId = () => {
-    const d = new Date();
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const yyyy = d.getFullYear();
-    return `${dd}_${mm}_${yyyy}`;
-  };
-
   useEffect(() => {
     try {
-      const id = fechaHoyId();
+      const id = fechaIdDesdeInput(selectedDate);
       const docRef = doc(db, 'CAJAS', id);
       
       const unsubscribe = onSnapshot(docRef, (snap) => {
@@ -60,7 +57,7 @@ const Carrito = forwardRef((props, ref) => {
     } catch (error) {
       console.error('Error al configurar listener:', error);
     }
-  }, []);
+  }, [selectedDate]);
 
   useImperativeHandle(ref, () => ({
     agregarAlCarrito: (producto) => {
@@ -242,6 +239,7 @@ const Carrito = forwardRef((props, ref) => {
       {mostrarPago && (
         <MetodoDePago 
           total={calcularTotalCarrito()}
+          selectedDate={selectedDate}
           onClose={() => setMostrarPago(false)}
           onCompletarCompra={handleCompletarCompra}
           items={carrito}
