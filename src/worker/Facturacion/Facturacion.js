@@ -13,12 +13,12 @@ const fechaIdDesdeInput = (fecha) => {
   return `${dd}_${mm}_${yyyy}`;
 };
 
-export default function Facturacion() {
-  const obtenerFechaLocal = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
+const obtenerFechaLocal = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
+export default function Facturacion() {
   const carritoRef = useRef(null);
   const [isCajaOpen, setIsCajaOpen] = useState(false);
   const [cajaMode, setCajaMode] = useState('open'); // 'open' or 'close'
@@ -76,7 +76,11 @@ export default function Facturacion() {
           <input
             type="date"
             value={fechaSeleccionada}
-            onChange={(e) => setFechaSeleccionada(e.target.value)}
+            max={obtenerFechaLocal()}
+            disabled={!isAdmin}
+            onChange={(e) => {
+              if (isAdmin) setFechaSeleccionada(e.target.value);
+            }}
           />
         </label>
         <div className="caja-buttons">

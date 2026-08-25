@@ -47,6 +47,7 @@ export default function Flujo() {
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getFechaLocal);
   const [movimientosRecientes, setMovimientosRecientes] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Form states
   const [metodo, setMetodo] = useState('');
@@ -58,8 +59,11 @@ export default function Flujo() {
   const [transferDesc, setTransferDesc] = useState('');
 
   useEffect(() => {
+    setIsAdmin(localStorage.getItem('userRole') === 'ADMINISTRADOR');
     fetchPaymentMethods();
   }, [selectedDate]);
+
+  const puedeOperarFecha = () => isAdmin || selectedDate === getFechaLocal();
 
   const fetchMovimientos = async () => {
     const movimientosRef = doc(db, 'MOVIMIENTOS', getFechaId(selectedDate));
@@ -114,6 +118,10 @@ export default function Flujo() {
 
   // --- INGRESO ---
   const handleIngreso = async () => {
+    if (!puedeOperarFecha()) {
+      toast.error('Solo el administrador puede operar fechas anteriores');
+      return;
+    }
     if (!valor || Number(valor) <= 0) {
       toast.error('Ingresa un monto válido');
       return;
@@ -162,6 +170,10 @@ export default function Flujo() {
 
   // --- RETIRO ---
   const handleRetiro = async () => {
+    if (!puedeOperarFecha()) {
+      toast.error('Solo el administrador puede operar fechas anteriores');
+      return;
+    }
     if (!valor || Number(valor) <= 0) {
       toast.error('Ingresa un monto válido');
       return;
@@ -223,6 +235,10 @@ export default function Flujo() {
 
   // --- TRANSFERENCIA ---
   const handleTransfer = async () => {
+    if (!puedeOperarFecha()) {
+      toast.error('Solo el administrador puede operar fechas anteriores');
+      return;
+    }
     if (!transferValor || Number(transferValor) <= 0) {
       toast.error('Ingresa un monto válido');
       return;
@@ -312,7 +328,11 @@ export default function Flujo() {
           <input
             type="date"
             value={selectedDate}
-            onChange={e => setSelectedDate(e.target.value)}
+            max={getFechaLocal()}
+            disabled={!isAdmin}
+            onChange={e => {
+              if (isAdmin) setSelectedDate(e.target.value);
+            }}
           />
         </label>
       </div>

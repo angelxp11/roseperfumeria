@@ -5,6 +5,7 @@ import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import * as XLSX from 'xlsx';
 import { FaPlus, FaEdit, FaTrash, FaDownload, FaUpload, FaSearch, FaTimes } from 'react-icons/fa';
+import Prices from '../update prices/prices';
 import './inventario.css';
 
 const CACHE_KEY = 'productos_cache';
@@ -12,12 +13,40 @@ const CACHE_TIMESTAMP_KEY = 'productos_cache_timestamp';
 const CACHE_VERSION_KEY = 'productos_cache_version';
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutos en ms
 
+export const sanitizeProductoParaEstado = (producto) => {
+  if (Array.isArray(producto)) {
+    return producto.map(item => sanitizeProductoParaEstado(item));
+  }
+
+  if (!producto || typeof producto !== 'object') {
+    return producto;
+  }
+
+  const limpio = {};
+
+  Object.entries(producto).forEach(([key, value]) => {
+    if (value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, '_methodName')) {
+      return;
+    }
+
+    if (value && typeof value === 'object') {
+      limpio[key] = sanitizeProductoParaEstado(value);
+      return;
+    }
+
+    limpio[key] = value;
+  });
+
+  return limpio;
+};
+
 export default function AdminInventario() {
   const [productos, setProductos] = useState([]);
   const [productosFiltrados, setProductosFiltrados] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showPricesModal, setShowPricesModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [busqueda, setBusqueda] = useState('');
   const [formData, setFormData] = useState({
@@ -69,10 +98,10 @@ export default function AdminInventario() {
   }, [busqueda, productos]);
 
   useEffect(() => {
-    if (showModal && esencias.length === 0) {
+    if ((showModal || showPricesModal) && esencias.length === 0) {
       cargarEsencias();
     }
-  }, [showModal]);
+  }, [showModal, showPricesModal]);
 
   // ====== CACHÉ FUNCTIONS ======
   const obtenerProductosDelCache = () => {
@@ -158,10 +187,11 @@ export default function AdminInventario() {
       
       if (productosEnCache && productosEnCache.length > 0) {
         // Usar caché mientras se sincroniza con servidor
+        const productosSanitizados = productosEnCache.map(p => sanitizeProductoParaEstado(p));
         if (isMountedRef.current) {
-          setProductos(productosEnCache);
-          setProductosFiltrados(productosEnCache);
-          const cats = new Set(productosEnCache.map(p => p.category).filter(Boolean));
+          setProductos(productosSanitizados);
+          setProductosFiltrados(productosSanitizados);
+          const cats = new Set(productosSanitizados.map(p => p.category).filter(Boolean));
           setCategorias(Array.from(cats));
         }
       }
@@ -187,7 +217,7 @@ export default function AdminInventario() {
       unsubscribeRef.current = onSnapshot(productosRef, (snapshot) => {
         if (!isMountedRef.current) return;
         
-        const prods = snapshot.docs.map(doc => ({
+        const prods = snapshot.docs.map(doc => sanitizeProductoParaEstado({
           documentId: doc.id,
           ...doc.data()
         }));
@@ -459,10 +489,10 @@ export default function AdminInventario() {
         await updateDoc(docRef, dataToUpdate);
         
         // Actualizar en caché y estado sin hacer consulta adicional
-        const productoActualizado = {
+        const productoActualizado = sanitizeProductoParaEstado({
           documentId: editingId,
           ...dataToUpdate
-        };
+        });
         actualizarProductoEnCache(productoActualizado);
         setProductos(prev => prev.map(p => p.documentId === editingId ? productoActualizado : p));
         
@@ -538,16 +568,18 @@ export default function AdminInventario() {
   };
 
   const handleEdit = (producto) => {
+    const productoLimpio = sanitizeProductoParaEstado(producto);
+
     setFormData({
-      id: producto.id,
-      name: producto.name,
-      category: producto.category,
-      stock: producto.stock || '',
-      price: producto.price,
-      idFormulas: producto.idFormula ? [producto.idFormula] : [],
-      idEsencia: producto.idEsencia || '',
+      id: productoLimpio.id,
+      name: productoLimpio.name,
+      category: productoLimpio.category,
+      stock: productoLimpio.stock || '',
+      price: productoLimpio.price,
+      idFormulas: productoLimpio.idFormula ? [productoLimpio.idFormula] : [],
+      idEsencia: productoLimpio.idEsencia || '',
       formulasPrices: {},
-      esenciaGramos: producto.esenciaGramos || ''
+      esenciaGramos: productoLimpio.esenciaGramos || ''
     });
     setEditingId(producto.documentId);
     setShowModal(true);
@@ -804,6 +836,9 @@ export default function AdminInventario() {
           </button>
           <button onClick={() => setShowImportModal(true)} className="btn btn-secondary" disabled={loading}>
             <FaUpload /> Importar Excel
+          </button>
+          <button onClick={() => setShowPricesModal(true)} className="btn btn-secondary" disabled={loading}>
+            <FaEdit /> Actualizar precios
           </button>
         </div>
       </div>
@@ -1233,6 +1268,18 @@ export default function AdminInventario() {
             </div>
           </div>
         </div>
+      )}
+
+      {showPricesModal && (
+        <Prices
+          productos={productos}
+          esencias={esencias}
+          onClose={() => setShowPricesModal(false)}
+          onProductsUpdated={(productosActualizados) => {
+            setProductos(productosActualizados);
+            guardarProductosEnCache(productosActualizados);
+          }}
+        />
       )}
     </div>
   );
