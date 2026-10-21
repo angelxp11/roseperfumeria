@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, setDoc, doc, serverTimestamp, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, setDoc, doc, serverTimestamp, getDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../../server/firebase';
 import { toast } from 'react-toastify';
 import { FaPlus, FaTrash } from 'react-icons/fa';
@@ -7,11 +7,30 @@ import { FaPlus, FaTrash } from 'react-icons/fa';
 import jsPDF from 'jspdf';
 import './pedidosreabastecer.css';
 
+const CATEGORIAS_PERFUME_11 = [
+  'PERFUMES DAMA 1.1',
+  'PERFUMES HOMBRE 1.1'
+];
+
+const formatearMiles = (valor) => {
+  const digitos = String(valor ?? '').replace(/\D/g, '');
+  return digitos ? Number(digitos).toLocaleString('es-CO') : '';
+};
+
+const convertirPrecio = (valor) => {
+  const digitos = String(valor ?? '').replace(/\D/g, '');
+  return digitos ? Number(digitos) : NaN;
+};
+
 export default function PedidosReabastecer() {
   const [esencias, setEsencias] = useState([]);
   const [insumos, setInsumos] = useState([]);
   const [envases, setEnvases] = useState([]);
-  // second select choice
+  const [perfumes11, setPerfumes11] = useState([]);
+  const [preciosPerfumes11, setPreciosPerfumes11] = useState({});
+  const [showPrices11Modal, setShowPrices11Modal] = useState(false);
+  const [busquedaPerfumes11, setBusquedaPerfumes11] = useState('');
+  const [busquedaProducto, setBusquedaProducto] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [category, setCategory] = useState('ESENCIA');
   const [orderItems, setOrderItems] = useState([]);
@@ -25,6 +44,13 @@ export default function PedidosReabastecer() {
   const [selectedArrived, setSelectedArrived] = useState({});
   const [receivedPage, setReceivedPage] = useState(1);
   const ordersPerPage = 5;
+
+  const esPerfume11 = (producto) => {
+    const formula = String(producto.idFormula || '').trim().toUpperCase().replace(',', '.');
+    const categoria = String(producto.category || '').trim().toUpperCase();
+    return CATEGORIAS_PERFUME_11.includes(categoria) ||
+      formula === 'F1.1';
+  };
 
   useEffect(() => {
     // load data depending on mode
@@ -51,6 +77,9 @@ export default function PedidosReabastecer() {
 
       setEsencias(essSnap.docs.map(d => ({ documentId: d.id, tipo: 'ESENCIA', ...d.data() })));
       setInsumos(insSnap.docs.map(d => ({ documentId: d.id, tipo: 'INSUMOS', ...d.data() })));
+      setPerfumes11(prodSnap.docs
+        .map(d => ({ documentId: d.id, ...d.data() }))
+        .filter(esPerfume11));
       const env = prodSnap.docs
         .map(d => ({ documentId: d.id, ...d.data() }))
         .filter(p => (p.category || '').toUpperCase() === 'ENVASE');
@@ -65,15 +94,30 @@ export default function PedidosReabastecer() {
 
   // return items available for the selected category
   const categoryItems = () => {
-    return category === 'ESENCIA' ? esencias : category === 'INSUMOS' ? insumos : envases;
+    if (category === 'ESENCIA') return esencias;
+    if (category === 'INSUMOS') return insumos;
+    if (category === 'ENVASE') return envases;
+    return perfumes11.filter(producto => (
+      String(producto.category || '').trim().toUpperCase() === category
+    ));
   };
 
   const handleAddToOrder = (item) => {
-    const exists = orderItems.find(i => i.key === (item.documentId || item.id));
+    const itemCategory = item.category || category;
+    const itemKey = `${itemCategory}-${item.documentId || item.id}`;
+    const exists = orderItems.find(i => i.key === itemKey);
     if (exists) {
       setOrderItems(prev => prev.map(i => i.key === exists.key ? { ...i, quantity: String(parseInt(exists.quantity || 0) + 1) } : i));
     } else {
-      setOrderItems(prev => [...prev, { key: item.documentId || item.id, category, id: item.id || '', name: item.name || '', quantity: '1', documentId: item.documentId, genero: item.genero || '' }]);
+      setOrderItems(prev => [...prev, {
+        key: itemKey,
+        category: itemCategory,
+        id: item.id || '',
+        name: item.name || '',
+        quantity: '1',
+        documentId: item.documentId,
+        genero: item.genero || ''
+      }]);
     }
   };
 
@@ -139,9 +183,25 @@ export default function PedidosReabastecer() {
     return String(next).padStart(12, '0');
   };
 
-  // generar lista de 8 variantes a partir de una esencia
+  const getNextProductId = async () => {
+    const snap = await getDocs(collection(db, 'PRODUCTOS'));
+    const ids = snap.docs
+      .map(d => parseInt(d.data().id, 10))
+      .filter(Number.isFinite)
+      .concat(orderItems.map(item => parseInt(item.id, 10)).filter(Number.isFinite));
+    const next = ids.reduce((maxId, id) => Math.max(maxId, id), 0) + 1;
+    return String(next).padStart(12, '0');
+  };
+
+  const categoriaPorGenero = (genero = '') => {
+    const normalized = genero.toUpperCase();
+    if (/HOMBRE|MASCULINO/.test(normalized)) return 'PERFUMES HOMBRE 1.1';
+    return 'PERFUMES DAMA 1.1';
+  };
+
   const generarVariantesEsencia = (esencia) => {
     const formulas = [
+      { categoria: categoriaPorGenero(esencia.genero), idFormula: 'F1.1', precio: '' },
       { categoria: 'FRAGANCIA', idFormula: 'F30', precio: 21000 },
       { categoria: 'FRAGANCIA', idFormula: 'F50', precio: 42000 },
       { categoria: 'FRAGANCIA', idFormula: 'F60', precio: 47000 },
@@ -155,7 +215,7 @@ export default function PedidosReabastecer() {
     return formulas.map(f => ({
       nombre: esencia.name,
       categoria: f.categoria,
-      precio: f.precio + (isArab && f.categoria === 'FRAGANCIA' ? 5000 : 0),
+      precio: f.precio === '' ? '' : f.precio + (isArab && f.categoria === 'FRAGANCIA' ? 5000 : 0),
       // reference formula code stored as idFormula in PRODUCTOS
       idFormula: f.idFormula,
       idEsencia: esencia.id
@@ -164,7 +224,7 @@ export default function PedidosReabastecer() {
 
   // persiste variantes como productos nuevos en la colección PRODUCTOS
   const crearVariantesEnDB = async (esencia) => {
-    const variantes = generarVariantesEsencia(esencia);
+    const variantes = esencia.variants || generarVariantesEsencia(esencia);
     const prodSnap = await getDocs(collection(db, 'PRODUCTOS'));
     const existingIds = prodSnap.docs
       .map(d => parseInt(d.data().id))
@@ -178,7 +238,7 @@ export default function PedidosReabastecer() {
         id: prodIdStr,
         name: v.nombre,
         category: v.categoria,
-        price: v.precio,
+        price: convertirPrecio(v.precio),
         // store the formula reference under the correct field name
         idFormula: v.idFormula,
         idEsencia: v.idEsencia
@@ -189,12 +249,124 @@ export default function PedidosReabastecer() {
     return variantes; // useful for debugging or UI
   };
 
+  const handleVariantPriceChange = (esenciaId, formulaId, precio) => {
+    setVariantPrompt(prev => ({
+      ...prev,
+      esencias: prev.esencias.map(es => es.id !== esenciaId ? es : {
+        ...es,
+        variants: es.variants.map(variant => (
+          variant.idFormula === formulaId ? { ...variant, precio } : variant
+        ))
+      })
+    }));
+  };
+
+  const handleVariantCategoryChange = (esenciaId, formulaId, categoria) => {
+    setVariantPrompt(prev => ({
+      ...prev,
+      esencias: prev.esencias.map(es => es.id !== esenciaId ? es : {
+        ...es,
+        variants: es.variants.map(variant => (
+          variant.idFormula === formulaId ? { ...variant, categoria } : variant
+        ))
+      })
+    }));
+  };
+
+  const abrirActualizarPrecios11 = async () => {
+    try {
+      setLoading(true);
+      const snapshot = await getDocs(collection(db, 'PRODUCTOS'));
+      const productos = snapshot.docs
+        .map(d => ({ documentId: d.id, ...d.data() }))
+        .filter(esPerfume11);
+      setPerfumes11(productos);
+      setPreciosPerfumes11(Object.fromEntries(
+        productos.map(producto => [producto.documentId, formatearMiles(producto.price)])
+      ));
+      setBusquedaPerfumes11('');
+      setShowPrices11Modal(true);
+    } catch (err) {
+      console.error('Error al cargar perfumes 1.1:', err);
+      toast.error('No se pudieron cargar los perfumes 1.1');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const guardarPrecios11 = async () => {
+    const cambios = perfumes11.flatMap(producto => {
+      const entrada = String(preciosPerfumes11[producto.documentId] ?? '').trim();
+      if (!entrada) return [];
+      const precio = convertirPrecio(entrada);
+      return Number.isFinite(precio) && precio >= 0 && precio !== Number(producto.price)
+        ? [{ producto, precio }]
+        : [];
+    });
+
+    if (cambios.length === 0) {
+      toast.error('Ingresa o cambia al menos un precio válido para actualizar');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      for (let i = 0; i < cambios.length; i += 500) {
+        const batch = writeBatch(db);
+        cambios.slice(i, i + 500).forEach(({ producto, precio }) => {
+          batch.update(doc(db, 'PRODUCTOS', producto.documentId), { price: precio });
+        });
+        await batch.commit();
+      }
+      setPerfumes11(prev => prev.map(producto => {
+        const cambio = cambios.find(item => item.producto.documentId === producto.documentId);
+        return cambio ? { ...producto, price: cambio.precio } : producto;
+      }));
+      toast.success(`${cambios.length} perfume(s) 1.1 actualizado(s)`);
+      setShowPrices11Modal(false);
+    } catch (err) {
+      console.error('Error al actualizar precios de perfumes 1.1:', err);
+      toast.error('No se pudieron actualizar los precios de los perfumes 1.1');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const confirmarGeneracionVariantes = async () => {
+    const preciosValidos = variantPrompt.esencias.every(es =>
+      es.variants.every(variant =>
+        String(variant.precio).trim() !== '' &&
+        Number.isFinite(convertirPrecio(variant.precio)) &&
+        convertirPrecio(variant.precio) >= 0
+      )
+    );
+    if (!preciosValidos) {
+      toast.error('Ingresa un precio válido para cada perfume y presentación');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      for (const esencia of variantPrompt.esencias) {
+        await crearVariantesEnDB(esencia);
+      }
+      toast.success('Variantes generadas');
+      setVariantPrompt({ visible: false, esencias: [] });
+      await loadAllProducts();
+    } catch (err) {
+      console.error('Error al generar variantes:', err);
+      toast.error('No se pudieron generar todas las variantes');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const openNewModal = async () => {
     let idVal = '';
     if (category === 'ESENCIA') {
       idVal = await getNextEsenciaId();
     }
-    setNewItemData({ category: 'ESENCIA', id: idVal, name: '', genero: '' });
+    setNewItemData({ category: 'ESENCIA', id: idVal, name: '', genero: '', price: '' });
     setShowNewModal(true);
   };
 
@@ -283,7 +455,7 @@ export default function PedidosReabastecer() {
   };
 
   const addNewToOrder = async () => {
-    const { category: cat, id, name, genero } = newItemData;
+    const { category: cat, id, name, genero, price } = newItemData;
     if (!name || !id) {
       toast.error('Por favor ingresa nombre e ID del producto');
       return;
@@ -292,12 +464,28 @@ export default function PedidosReabastecer() {
       toast.error('Por favor ingresa género de la esencia');
       return;
     }
+    const esCategoriaPerfume11 = CATEGORIAS_PERFUME_11.includes(cat);
+    if (esCategoriaPerfume11 && (
+      price === '' || !Number.isFinite(convertirPrecio(price)) || convertirPrecio(price) < 0
+    )) {
+      toast.error('Ingresa un precio válido para el perfume 1.1');
+      return;
+    }
     const key = `${cat}-${id}`;
     const exists = orderItems.find(i => i.key === key);
     if (exists) {
       setOrderItems(prev => prev.map(i => i.key === key ? { ...i, quantity: i.quantity + 1 } : i));
     } else {
-      setOrderItems(prev => [...prev, { key, category: cat, id, name, quantity: '1', isNew: true, genero: cat === 'ESENCIA' ? genero : undefined }]);
+      setOrderItems(prev => [...prev, {
+        key,
+        category: cat,
+        id,
+        name,
+        quantity: '1',
+        isNew: true,
+        genero: cat === 'ESENCIA' ? genero : undefined,
+        price: esCategoriaPerfume11 ? convertirPrecio(price) : undefined
+      }]);
       // no generamos variantes hasta que la esencia se cree en la base de datos (al guardar pedido)
     }
     setShowNewModal(false);
@@ -325,6 +513,16 @@ export default function PedidosReabastecer() {
           if (item.category === 'ENVASE') {
             const docRef = doc(db, 'PRODUCTOS', item.id);
             batchPromises.push(setDoc(docRef, { id: item.id, name: item.name, category: 'ENVASE', stock: 0, price: 0 }));
+          }
+          if (CATEGORIAS_PERFUME_11.includes(item.category)) {
+            const docRef = doc(db, 'PRODUCTOS', item.id);
+            batchPromises.push(setDoc(docRef, {
+              id: item.id,
+              name: item.name,
+              category: item.category,
+              stock: 0,
+              price: Number(item.price)
+            }));
           }
         }
       });
@@ -365,6 +563,18 @@ export default function PedidosReabastecer() {
     }
   };
 
+  const perfumes11Filtrados = perfumes11.filter(producto =>
+    String(producto.name || '').toLocaleLowerCase('es').includes(
+      busquedaPerfumes11.trim().toLocaleLowerCase('es')
+    )
+  );
+  const productosCoincidentes = categoryItems().filter(item => {
+    const consulta = busquedaProducto.trim().toLocaleLowerCase('es');
+    return consulta && `${item.name || ''} ${item.id || ''}`
+      .toLocaleLowerCase('es')
+      .includes(consulta);
+  });
+
   return (
     <>
       <div className="prc-header-switch">
@@ -389,26 +599,62 @@ export default function PedidosReabastecer() {
       {mode === 'crear' && (
         <>
           <div className="prc-pedidos-controls">
-            <select value={category} onChange={e => { setCategory(e.target.value); setSelectedProductId(''); }}>
+            <select value={category} onChange={e => {
+              setCategory(e.target.value);
+              setSelectedProductId('');
+              setBusquedaProducto('');
+            }}>
               <option value="ESENCIA">Esencias</option>
               <option value="INSUMOS">Insumos</option>
               <option value="ENVASE">Envases</option>
-            </select>
-
-            <select
-              value={selectedProductId}
-              onChange={e => setSelectedProductId(e.target.value)}
-            >
-              <option value="">Selecciona producto...</option>
-              {categoryItems().map(item => (
-                <option key={item.documentId || item.id} value={item.documentId || item.id}>
-                  {item.name || item.id}
-                </option>
+              {CATEGORIAS_PERFUME_11.map(categoria => (
+                <option key={categoria} value={categoria}>{categoria}</option>
               ))}
             </select>
 
+            <div className="prc-product-search">
+              <input
+                type="search"
+                value={busquedaProducto}
+                onChange={e => {
+                  setBusquedaProducto(e.target.value);
+                  setSelectedProductId('');
+                }}
+                placeholder="Buscar producto por nombre o ID..."
+                aria-label="Buscar producto por nombre o ID"
+                aria-controls="prc-product-search-results"
+              />
+              {busquedaProducto.trim() && (
+                <div className="prc-product-search-results" id="prc-product-search-results" role="listbox">
+                  {productosCoincidentes.length > 0 ? productosCoincidentes.map(item => {
+                    const itemId = item.documentId || item.id;
+                    const seleccionado = selectedProductId === itemId;
+                    return (
+                      <button
+                        type="button"
+                        key={itemId}
+                        className={seleccionado ? 'selected' : ''}
+                        onClick={() => {
+                          setSelectedProductId(itemId);
+                          setBusquedaProducto(item.name || item.id);
+                        }}
+                        role="option"
+                        aria-selected={seleccionado}
+                      >
+                        <span>{item.name || item.id}</span>
+                        <small>{item.category || category} · ID {item.id}</small>
+                      </button>
+                    );
+                  }) : (
+                    <p>No hay productos que coincidan con la búsqueda.</p>
+                  )}
+                </div>
+              )}
+            </div>
+
             <button
               className="prc-btn prc-btn-primary"
+              disabled={!selectedProductId}
               onClick={() => {
                 if (selectedProductId) {
                   const item = categoryItems().find(
@@ -416,6 +662,7 @@ export default function PedidosReabastecer() {
                   );
                   if (item) handleAddToOrder(item);
                   setSelectedProductId('');
+                  setBusquedaProducto('');
                 }
               }}
             >
@@ -424,6 +671,13 @@ export default function PedidosReabastecer() {
 
             <button className="prc-btn prc-btn-secondary" onClick={openNewModal}>
               <FaPlus /> Producto nuevo
+            </button>
+            <button
+              className="prc-btn prc-btn-secondary"
+              onClick={abrirActualizarPrecios11}
+              disabled={loading}
+            >
+              Actualizar precios perfumes 1.1
             </button>
           </div>
         </>
@@ -602,31 +856,62 @@ export default function PedidosReabastecer() {
               <label>Categoría</label>
               <select name="category" value={newItemData.category} onChange={async e => {
                   const val = e.target.value;
-                  let idVal = newItemData.id;
+                  let idVal = '';
                   if (val === 'ESENCIA') {
                     idVal = await getNextEsenciaId();
+                  } else if (CATEGORIAS_PERFUME_11.includes(val)) {
+                    idVal = await getNextProductId();
                   } else {
                     idVal = '';
                   }
-                  setNewItemData(prev => ({ ...prev, category: val, id: idVal, genero: '' }));
+                  setNewItemData(prev => ({ ...prev, category: val, id: idVal, genero: '', price: '' }));
               }}>
                 <option value="ESENCIA">Esencia</option>
                 <option value="INSUMOS">Insumo</option>
                 <option value="ENVASE">Envase</option>
+                <option value="PERFUMES DAMA 1.1">PERFUMES DAMA 1.1</option>
+                <option value="PERFUMES HOMBRE 1.1">PERFUMES HOMBRE 1.1</option>
               </select>
             </div>
             <div className="prc-form-group">
-              <label>ID</label>
-              <input name="id" value={newItemData.id} onChange={handleNewInputChange} />
+              <label>{CATEGORIAS_PERFUME_11.includes(newItemData.category) ? 'ID generado' : 'ID'}</label>
+              <input
+                name="id"
+                value={newItemData.id}
+                onChange={handleNewInputChange}
+                readOnly={CATEGORIAS_PERFUME_11.includes(newItemData.category)}
+              />
             </div>
             <div className="prc-form-group">
               <label>Nombre</label>
               <input name="name" value={newItemData.name} onChange={handleNewInputChange} />
             </div>
+            {CATEGORIAS_PERFUME_11.includes(newItemData.category) && (
+              <p className="prc-form-hint">
+                Para perfumes importados, escribe el nombre comercial y selecciona la categoría de dama u hombre correspondiente.
+              </p>
+            )}
             {newItemData.category === 'ESENCIA' && (
               <div className="prc-form-group">
                 <label>Género</label>
                 <input name="genero" value={newItemData.genero} onChange={handleNewInputChange} />
+              </div>
+            )}
+            {CATEGORIAS_PERFUME_11.includes(newItemData.category) && (
+              <div className="prc-form-group">
+                <label>Precio *</label>
+                <input
+                  name="price"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9.]*"
+                  value={newItemData.price}
+                  onChange={e => setNewItemData(prev => ({
+                    ...prev,
+                    price: formatearMiles(e.target.value)
+                  }))}
+                  required
+                />
               </div>
             )}
             <div className="prc-modal-actions">
@@ -637,40 +922,119 @@ export default function PedidosReabastecer() {
         </div>
       )}
 
+      {showPrices11Modal && (
+        <div className="prc-modal-overlay" onClick={() => setShowPrices11Modal(false)}>
+          <div className="prc-modal prc-modal-prices" onClick={e => e.stopPropagation()}>
+            <h3>Actualizar precios de perfumes 1.1</h3>
+            {perfumes11.length === 0 ? (
+              <p>No hay perfumes 1.1 para actualizar.</p>
+            ) : (
+              <div className="prc-price-list">
+                <div className="prc-form-group">
+                  <label htmlFor="buscar-perfume-11">Buscar por nombre</label>
+                  <input
+                    id="buscar-perfume-11"
+                    type="search"
+                    value={busquedaPerfumes11}
+                    onChange={e => setBusquedaPerfumes11(e.target.value)}
+                    placeholder="Escribe el nombre del perfume"
+                  />
+                </div>
+                {perfumes11Filtrados.map(producto => (
+                  <div className="prc-form-group" key={producto.documentId}>
+                    <label>{producto.category} · {producto.name || producto.id}</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9.]*"
+                      value={preciosPerfumes11[producto.documentId] ?? ''}
+                      onChange={e => setPreciosPerfumes11(prev => ({
+                        ...prev,
+                        [producto.documentId]: formatearMiles(e.target.value)
+                      }))}
+                    />
+                  </div>
+                ))}
+                {perfumes11Filtrados.length === 0 && (
+                  <p>No hay perfumes que coincidan con la búsqueda.</p>
+                )}
+              </div>
+            )}
+            <div className="prc-modal-actions">
+              <button
+                onClick={() => setShowPrices11Modal(false)}
+                className="prc-btn prc-btn-secondary"
+                disabled={loading}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={guardarPrecios11}
+                className="prc-btn prc-btn-primary"
+                disabled={loading || perfumes11.length === 0}
+              >
+                {loading ? 'Actualizando...' : 'Guardar precios'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {variantPrompt.visible && (
         <div className="prc-modal-overlay" onClick={() => setVariantPrompt({ visible: false, esencias: [] })}>
-          <div className="prc-modal" onClick={e => e.stopPropagation()}>
-            <h3>¿Generar variantes para las esencias?</h3>
-            <p>Se crearán los siguientes productos:</p>
-            <ul>
+          <div className="prc-modal prc-modal-prices" onClick={e => e.stopPropagation()}>
+            <h3>¿Generar perfumes y variantes para las esencias?</h3>
+            <p>Revisa o ajusta el precio de cada fórmula antes de crear los productos:</p>
+            <div className="prc-price-list">
               {variantPrompt.esencias.map(es => (
-                <li key={es.id}>
-                  {es.name}: {es.variants.map(v => v.idFormula).join(', ')}
-                </li>
+                <section key={es.id}>
+                  <h4>{es.name}</h4>
+                  {es.variants.map(variant => (
+                    <div className="prc-form-group" key={`${es.id}-${variant.idFormula}`}>
+                      <label>
+                        {variant.idFormula === 'F1.1' ? 'Categoría del perfume 1.1' : variant.categoria}
+                        {' · '}{variant.idFormula}
+                      </label>
+                      {variant.idFormula === 'F1.1' && (
+                        <select
+                          value={variant.categoria}
+                          onChange={e => handleVariantCategoryChange(es.id, variant.idFormula, e.target.value)}
+                        >
+                          {CATEGORIAS_PERFUME_11.map(categoria => (
+                            <option key={categoria} value={categoria}>{categoria}</option>
+                          ))}
+                        </select>
+                      )}
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9.]*"
+                        value={formatearMiles(variant.precio)}
+                        onChange={e => handleVariantPriceChange(
+                          es.id,
+                          variant.idFormula,
+                          formatearMiles(e.target.value)
+                        )}
+                      />
+                    </div>
+                  ))}
+                </section>
               ))}
-            </ul>
+            </div>
             <div className="prc-modal-actions">
               <button
                 className="prc-btn prc-btn-secondary"
                 onClick={() => setVariantPrompt({ visible: false, esencias: [] })}
+                disabled={loading}
               >
                 No
               </button>
               <button
                 className="prc-btn prc-btn-primary"
-                onClick={async () => {
-                  for (const es of variantPrompt.esencias) {
-                    try {
-                      await crearVariantesEnDB(es);
-                    } catch (e) {
-                      console.error('error generando variante', e);
-                    }
-                  }
-                  toast.success('Variantes generadas');
-                  setVariantPrompt({ visible: false, esencias: [] });
-                }}
+                onClick={confirmarGeneracionVariantes}
+                disabled={loading}
               >
-                Sí
+                {loading ? 'Creando...' : 'Sí, crear productos'}
               </button>
             </div>
           </div>

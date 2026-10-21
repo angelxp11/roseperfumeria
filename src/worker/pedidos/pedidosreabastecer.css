@@ -137,6 +137,67 @@
   min-width:180px;
 }
 
+.prc-product-search{
+  position:relative;
+  flex:1;
+  min-width:220px;
+}
+
+.prc-product-search > input{
+  box-sizing:border-box;
+  width:100%;
+  padding:9px 12px;
+  border-radius:8px;
+  border:1px solid var(--color-border);
+  background:rgba(255,255,255,0.05);
+  color:var(--color-text);
+  font-size:14px;
+}
+
+.prc-product-search-results{
+  position:absolute;
+  top:calc(100% + 4px);
+  left:0;
+  right:0;
+  z-index:20;
+  max-height:260px;
+  overflow-y:auto;
+  border:1px solid var(--color-border);
+  border-radius:8px;
+  background:var(--color-bg);
+  box-shadow:0 8px 18px rgba(0,0,0,.35);
+}
+
+.prc-product-search-results button{
+  display:flex;
+  width:100%;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:3px;
+  padding:9px 12px;
+  border:0;
+  border-bottom:1px solid var(--color-border);
+  background:var(--color-bg);
+  color:var(--color-text);
+  text-align:left;
+  cursor:pointer;
+}
+
+.prc-product-search-results button:hover,
+.prc-product-search-results button.selected{
+  background:rgba(176,116,69,.25);
+}
+
+.prc-product-search-results small{
+  color:var(--color-text-soft);
+}
+
+.prc-product-search-results p{
+  margin:0;
+  padding:12px;
+  color:var(--color-text-soft);
+}
+
 .prc-pedidos-controls select{
   padding:9px 12px;
   border-radius:8px;
@@ -144,6 +205,12 @@
   background:rgba(255,255,255,0.05);
   color:var(--color-text);
   font-size:14px;
+}
+
+.prc-pedidos-controls select option,
+.prc-form-group select option{
+  background:#000;
+  color:#fff;
 }
 
 .prc-pedidos-controls select:focus{
@@ -444,6 +511,21 @@
   animation:prcModalIn .25s ease;
 }
 
+.prc-modal-prices{
+  max-width:560px;
+}
+
+.prc-modal-prices .prc-price-list{
+  max-height:55vh;
+  overflow-y:auto;
+  margin:12px 0;
+  padding-right:6px;
+}
+
+.prc-modal-prices .prc-price-list h4{
+  margin:12px 0 8px;
+}
+
 @keyframes prcModalIn{
   from{
     transform:scale(.95);
@@ -465,6 +547,12 @@
   font-size:13px;
   margin-bottom:4px;
   color:var(--color-text-soft);
+}
+
+.prc-form-hint{
+  margin:-4px 0 12px;
+  color:var(--color-text-soft);
+  font-size:12px;
 }
 
 .prc-form-group input,
@@ -493,6 +581,10 @@
   }
 
   .prc-pedidos-controls select{
+    width:100%;
+  }
+
+  .prc-product-search{
     width:100%;
   }
 

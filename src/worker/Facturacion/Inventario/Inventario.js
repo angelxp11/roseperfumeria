@@ -178,9 +178,8 @@ export default function Inventario({ onAgregarAlCarrito }) {
 
 	const extraerMedida = (idFormula) => {
 		if (!idFormula) return '';
-		// Extraer números de cadenas como "C30", "F30", etc.
-		const numeros = idFormula.match(/\d+/);
-		return numeros ? `${numeros[0]}ml` : '';
+		const medida = String(idFormula).match(/\d+(?:[.,]\d+)?/);
+		return medida ? `${medida[0].replace(',', '.')}ml` : '';
 	};
 
 	const filtrarProductos = () => {
