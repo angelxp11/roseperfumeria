@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, deleteDoc, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../../server/firebase';
 import { toast } from 'react-toastify';
 import * as XLSX from 'xlsx';
@@ -12,6 +12,11 @@ export default function AdminEsencias() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [cambiosImportacion, setCambiosImportacion] = useState([]);
+  const [resumenImportacion, setResumenImportacion] = useState(null);
+  const [filtroTipoImportacion, setFiltroTipoImportacion] = useState('');
+  const [filtroAccionImportacion, setFiltroAccionImportacion] = useState('');
+  const [filtroCampoImportacion, setFiltroCampoImportacion] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [busqueda, setBusqueda] = useState('');
   const [tipoFiltro, setTipoFiltro] = useState('todos');
@@ -196,6 +201,7 @@ export default function AdminEsencias() {
   const descargarExcel = () => {
     try {
       const datos = esencias.map(e => ({
+        Tipo: e.tipo,
         ID: e.id,
         Nombre: e.name,
         Género: e.genero,
@@ -336,6 +342,238 @@ export default function AdminEsencias() {
     reader.readAsArrayBuffer(file);
   };
 
+  const prepararActualizacionExcel = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    setLoading(true);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const workbook = XLSX.read(new Uint8Array(event.target.result), { type: 'array' });
+        if (!workbook.SheetNames.length) throw new Error('El archivo no contiene hojas');
+
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const filas = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+        const [esenciasSnap, insumosSnap] = await Promise.all([
+          getDocs(collection(db, 'ESENCIA')),
+          getDocs(collection(db, 'INSUMOS'))
+        ]);
+        const porColeccion = {
+          ESENCIA: new Map(),
+          INSUMOS: new Map()
+        };
+        let ultimoIdEsencia = 0;
+        esenciasSnap.docs.forEach(esenciaDoc => {
+          const esencia = { documentId: esenciaDoc.id, ...esenciaDoc.data() };
+          porColeccion.ESENCIA.set(String(esencia.id || esencia.documentId), esencia);
+          porColeccion.ESENCIA.set(String(esencia.documentId), esencia);
+          const idNumerico = parseInt(esencia.id || esencia.documentId, 10);
+          if (Number.isFinite(idNumerico)) ultimoIdEsencia = Math.max(ultimoIdEsencia, idNumerico);
+        });
+        insumosSnap.docs.forEach(insumoDoc => {
+          const insumo = { documentId: insumoDoc.id, ...insumoDoc.data() };
+          porColeccion.INSUMOS.set(String(insumo.id || insumo.documentId).toUpperCase(), insumo);
+          porColeccion.INSUMOS.set(String(insumo.documentId).toUpperCase(), insumo);
+        });
+
+        const columnas = [
+          { columna: 'Nombre', campo: 'name', etiqueta: 'Nombre', tipo: 'texto' },
+          { columna: 'Género', campo: 'genero', etiqueta: 'Género', tipo: 'texto' },
+          { columna: 'Stock (gr)', campo: 'stock', etiqueta: 'Stock (gr)', tipo: 'numero' }
+        ];
+        const cambios = [];
+        const idsProcesados = new Set();
+        let filasInvalidas = 0;
+        let elementosNuevos = 0;
+
+        filas.forEach((fila, indice) => {
+          const idOriginal = String(fila.ID ?? '').trim();
+          const genero = String(fila.Género ?? '').trim();
+          const tipoDeclarado = String(fila.Tipo ?? '').trim().toUpperCase();
+          const tipoTentativo = tipoDeclarado === 'INSUMO' || tipoDeclarado === 'INSUMOS'
+            ? 'INSUMOS'
+            : tipoDeclarado === 'ESENCIA'
+              ? 'ESENCIA'
+              : genero.toUpperCase() === 'INSUMO' || genero.toUpperCase() === 'INSUMOS'
+                ? 'INSUMOS'
+                : 'ESENCIA';
+
+          let id = idOriginal
+            ? tipoTentativo === 'INSUMOS' ? idOriginal.toUpperCase() : idOriginal.padStart(12, '0')
+            : '';
+          let existente = id
+            ? porColeccion[tipoTentativo].get(id)
+            : null;
+          let tipo = existente ? tipoTentativo : tipoTentativo;
+
+          if (!existente && idOriginal && !tipoDeclarado) {
+            const idEsencia = idOriginal.padStart(12, '0');
+            const posibleEsencia = porColeccion.ESENCIA.get(idEsencia) || porColeccion.ESENCIA.get(idOriginal);
+            const posibleInsumo = porColeccion.INSUMOS.get(idOriginal.toUpperCase());
+            if (posibleEsencia || posibleInsumo) {
+              tipo = posibleInsumo ? 'INSUMOS' : 'ESENCIA';
+              existente = posibleInsumo || posibleEsencia;
+              id = tipo === 'INSUMOS' ? idOriginal.toUpperCase() : idEsencia;
+            }
+          }
+
+          if (!id) {
+            if (tipo === 'INSUMOS') {
+              id = `INSUMO_${Date.now()}_${indice}`.toUpperCase();
+            } else {
+              do {
+                ultimoIdEsencia++;
+                id = ultimoIdEsencia.toString().padStart(12, '0');
+              } while (porColeccion.ESENCIA.has(id) || idsProcesados.has(`ESENCIA:${id}`));
+            }
+          }
+
+          const llave = `${tipo}:${id}`;
+          if (idsProcesados.has(llave)) {
+            filasInvalidas++;
+            return;
+          }
+          idsProcesados.add(llave);
+          existente = existente || porColeccion[tipo].get(id);
+
+          const nuevosValores = {};
+          let filaInvalida = false;
+          columnas.forEach(({ columna, campo, tipo: tipoDato }) => {
+            const valor = fila[columna];
+            if (valor === null || valor === undefined || String(valor).trim() === '') return;
+            if (tipoDato === 'texto') {
+              nuevosValores[campo] = String(valor).trim();
+            } else {
+              const numero = Number(valor);
+              if (!Number.isFinite(numero) || numero < 0) {
+                filaInvalida = true;
+              } else {
+                nuevosValores[campo] = numero;
+              }
+            }
+          });
+
+          if (filaInvalida || (!existente && (!fila.Nombre || !genero || nuevosValores.stock === undefined))) {
+            filasInvalidas++;
+            return;
+          }
+
+          if (!existente) {
+            const datos = {
+              id,
+              name: String(fila.Nombre).trim().toUpperCase(),
+              genero,
+              stock: nuevosValores.stock
+            };
+            cambios.push({
+              tipoCambio: 'nuevo',
+              tipo,
+              documentId: id,
+              id,
+              nombre: datos.name,
+              genero: datos.genero,
+              datos,
+              campos: [
+                { campo: 'name', etiqueta: 'Nombre', anterior: '', nuevo: datos.name },
+                { campo: 'genero', etiqueta: 'Género', anterior: '', nuevo: datos.genero },
+                { campo: 'stock', etiqueta: 'Stock (gr)', anterior: '', nuevo: datos.stock }
+              ]
+            });
+            elementosNuevos++;
+            return;
+          }
+
+          const actualizaciones = {};
+          const camposCambiados = [];
+          columnas.forEach(({ campo, etiqueta, tipo: tipoDato }) => {
+            const valorNuevo = nuevosValores[campo];
+            if (valorNuevo === undefined) return;
+            const valorActual = existente[campo];
+            const sonIguales = tipoDato === 'texto'
+              ? String(valorActual ?? '').trim() === valorNuevo
+              : Number.isFinite(Number(valorActual)) && Number(valorActual) === valorNuevo;
+            if (!sonIguales) {
+              actualizaciones[campo] = valorNuevo;
+              camposCambiados.push({
+                campo,
+                etiqueta,
+                anterior: valorActual ?? '',
+                nuevo: valorNuevo
+              });
+            }
+          });
+
+          if (camposCambiados.length) {
+            cambios.push({
+              tipoCambio: 'actualizar',
+              tipo,
+              documentId: existente.documentId,
+              id: existente.id || id,
+              nombre: existente.name || fila.Nombre,
+              genero: nuevosValores.genero || existente.genero || '',
+              actualizaciones,
+              campos: camposCambiados
+            });
+          }
+        });
+
+        setCambiosImportacion(cambios);
+        setResumenImportacion({ elementosNuevos, filasInvalidas });
+        if (!cambios.length) {
+          toast.info('No hay elementos nuevos ni cambios válidos para aplicar');
+        }
+      } catch (err) {
+        console.error('Error al comparar esencias e insumos:', err);
+        toast.error('No se pudo comparar el archivo con esencias e insumos');
+      } finally {
+        setLoading(false);
+      }
+    };
+    reader.onerror = () => {
+      console.error('Error al leer el Excel de esencias e insumos');
+      toast.error('No se pudo leer el archivo seleccionado');
+      setLoading(false);
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const confirmarActualizacionExcel = async () => {
+    if (!cambiosImportacion.length) return;
+    setLoading(true);
+    let elementosProcesados = 0;
+    try {
+      for (let inicio = 0; inicio < cambiosImportacion.length; inicio += 500) {
+        const lote = cambiosImportacion.slice(inicio, inicio + 500);
+        const batch = writeBatch(db);
+        lote.forEach(elemento => {
+          const coleccion = elemento.tipo === 'INSUMOS' ? 'INSUMOS' : 'ESENCIA';
+          const referencia = doc(db, coleccion, elemento.documentId);
+          if (elemento.tipoCambio === 'nuevo') {
+            batch.set(referencia, elemento.datos);
+          } else {
+            batch.update(referencia, elemento.actualizaciones);
+          }
+        });
+        await batch.commit();
+        elementosProcesados += lote.length;
+      }
+
+      const nuevos = cambiosImportacion.filter(elemento => elemento.tipoCambio === 'nuevo').length;
+      toast.success(`Actualización completa: ${nuevos} elemento(s) agregado(s) y ${cambiosImportacion.length - nuevos} actualizado(s)`);
+      setCambiosImportacion([]);
+      setResumenImportacion(null);
+      setShowImportModal(false);
+      await cargarEsencias();
+    } catch (err) {
+      console.error('Error al actualizar esencias e insumos:', err);
+      toast.error(`No se completó la actualización. Se procesaron ${elementosProcesados} elemento(s); revisa los datos antes de reintentar.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const closeModal = () => {
     setShowModal(false);
     setFormData({ id: '', name: '', genero: '', stock: '', tipo: 'ESENCIA' });
@@ -344,11 +582,26 @@ export default function AdminEsencias() {
 
   const closeImportModal = () => {
     setShowImportModal(false);
+    setCambiosImportacion([]);
+    setResumenImportacion(null);
+    setFiltroTipoImportacion('');
+    setFiltroAccionImportacion('');
+    setFiltroCampoImportacion('');
   };
 
   const handleLimpiarBusqueda = () => {
     setBusqueda('');
   };
+
+  const tiposImportacion = [...new Set(cambiosImportacion.map(elemento => elemento.tipo))];
+  const camposImportacion = [...new Set(cambiosImportacion.flatMap(elemento => elemento.campos.map(campo => campo.etiqueta)))];
+  const cambiosImportacionFiltrados = cambiosImportacion.flatMap(elemento => {
+    if (filtroTipoImportacion && elemento.tipo !== filtroTipoImportacion) return [];
+    if (filtroAccionImportacion && elemento.tipoCambio !== filtroAccionImportacion) return [];
+    return elemento.campos
+      .filter(campo => !filtroCampoImportacion || campo.etiqueta === filtroCampoImportacion)
+      .map(campo => ({ elemento, campo }));
+  });
 
   return (
     <div className="esencias-container">
@@ -611,7 +864,102 @@ export default function AdminEsencias() {
                     disabled={loading}
                   />
                 </label>
+                <label className="btn btn-secondary">
+                  <FaUpload /> Actualizar inventario
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={prepararActualizacionExcel}
+                    style={{ display: 'none' }}
+                    disabled={loading}
+                  />
+                </label>
               </div>
+
+              {resumenImportacion && (
+                <div className="essence-import-review">
+                  <h4>
+                    {cambiosImportacion.length
+                      ? `Vista previa: ${resumenImportacion.elementosNuevos} elemento(s) nuevo(s) y ${cambiosImportacion.length - resumenImportacion.elementosNuevos} por actualizar`
+                      : 'No hay elementos nuevos ni cambios'}
+                  </h4>
+                  {resumenImportacion.filasInvalidas > 0 && (
+                    <p className="essence-import-summary">
+                      Se omitieron {resumenImportacion.filasInvalidas} fila(s) incompletas, duplicadas o con stock inválido.
+                    </p>
+                  )}
+                  {cambiosImportacion.length > 0 && (
+                    <>
+                      <div className="essence-import-filters">
+                        <label>
+                          Tipo
+                          <select value={filtroTipoImportacion} onChange={e => setFiltroTipoImportacion(e.target.value)}>
+                            <option value="">Todos</option>
+                            {tiposImportacion.map(tipo => <option key={tipo} value={tipo}>{tipo}</option>)}
+                          </select>
+                        </label>
+                        <label>
+                          Acción
+                          <select value={filtroAccionImportacion} onChange={e => setFiltroAccionImportacion(e.target.value)}>
+                            <option value="">Todas</option>
+                            <option value="nuevo">Agregar</option>
+                            <option value="actualizar">Actualizar</option>
+                          </select>
+                        </label>
+                        <label>
+                          Columna modificada
+                          <select value={filtroCampoImportacion} onChange={e => setFiltroCampoImportacion(e.target.value)}>
+                            <option value="">Todas</option>
+                            {camposImportacion.map(campo => <option key={campo} value={campo}>{campo}</option>)}
+                          </select>
+                        </label>
+                      </div>
+                      <div className="essence-changes-table">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Elemento</th>
+                              <th>Tipo</th>
+                              <th>Acción</th>
+                              <th>Campo</th>
+                              <th>Valor actual</th>
+                              <th>Nuevo valor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {cambiosImportacionFiltrados.map(({ elemento, campo }) => (
+                              <tr key={`${elemento.tipo}-${elemento.documentId}-${campo.campo}`}>
+                                <td>
+                                  <strong>{elemento.nombre}</strong>
+                                  <small>{elemento.id}</small>
+                                </td>
+                                <td>{elemento.tipo}</td>
+                                <td>{elemento.tipoCambio === 'nuevo' ? 'Agregar' : 'Actualizar'}</td>
+                                <td>{campo.etiqueta}</td>
+                                <td>{String(campo.anterior)}</td>
+                                <td className="essence-new-value">{String(campo.nuevo)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {cambiosImportacionFiltrados.length === 0 && (
+                          <p className="sin-datos">No hay cambios que coincidan con los filtros.</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  <div className="form-actions essence-import-review-actions">
+                    <button type="button" onClick={closeImportModal} className="btn btn-secondary" disabled={loading}>
+                      Cancelar actualización
+                    </button>
+                    {cambiosImportacion.length > 0 && (
+                      <button type="button" onClick={confirmarActualizacionExcel} className="btn btn-primary" disabled={loading}>
+                        {loading ? 'Actualizando...' : 'Aceptar actualización'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <button onClick={closeImportModal} className="btn btn-secondary" style={{ marginTop: '15px', width: '100%' }}>
                 Cerrar

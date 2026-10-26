@@ -365,6 +365,87 @@
   min-width: 150px;
 }
 
+.essence-import-review {
+  margin-top: 20px;
+}
+
+.essence-import-review h4 {
+  color: var(--color-text);
+}
+
+.essence-import-summary {
+  color: var(--color-text-soft);
+}
+
+.essence-import-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 15px 0;
+}
+
+.essence-import-filters label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 150px;
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+.essence-import-filters select {
+  padding: 9px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.essence-changes-table {
+  max-height: 45vh;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.essence-changes-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.essence-changes-table th,
+.essence-changes-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-soft);
+  text-align: left;
+}
+
+.essence-changes-table th {
+  position: sticky;
+  top: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.essence-changes-table td small {
+  display: block;
+  margin-top: 3px;
+  font-family: 'Courier New', monospace;
+}
+
+.essence-changes-table .essence-new-value {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.essence-import-review-actions {
+  margin-top: 20px;
+}
+
 .form-group {
   margin-bottom: 18px;
 }

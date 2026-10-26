@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, deleteField, onSnapshot, query } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, deleteField, onSnapshot, query, writeBatch } from 'firebase/firestore';
 import { db } from '../../server/firebase';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -46,6 +46,11 @@ export default function AdminInventario() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [cambiosImportacion, setCambiosImportacion] = useState([]);
+  const [resumenImportacion, setResumenImportacion] = useState(null);
+  const [filtroCategoriaImportacion, setFiltroCategoriaImportacion] = useState('');
+  const [filtroAccionImportacion, setFiltroAccionImportacion] = useState('');
+  const [filtroCampoImportacion, setFiltroCampoImportacion] = useState('');
   const [showPricesModal, setShowPricesModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [busqueda, setBusqueda] = useState('');
@@ -641,162 +646,236 @@ export default function AdminInventario() {
     }
   };
 
-  const descargarFormatoExcel = () => {
-    try {
-      const datosFormato = [
-        {
-          ID: '000000000001',
-          Nombre: 'EJEMPLO PERFUME',
-          Categoría: 'PERFUME',
-          Stock: '',
-          Precio: 120000,
-          'ID Fórmula': 'FORMULA001',
-          'ID Esencia': 'ESENCIA001',
-          'Esencia Gramos': ''
-        },
-        {
-          ID: '000000000002',
-          Nombre: 'EJEMPLO COLONIA',
-          Categoría: 'COLONIA',
-          Stock: 30,
-          Precio: 85000,
-          'ID Fórmula': '',
-          'ID Esencia': '',
-          'Esencia Gramos': ''
-        },
-        {
-          ID: '000000000003',
-          Nombre: 'ADICIONAL EJEMPLO',
-          Categoría: 'ADICIONALES',
-          Stock: '',
-          Precio: 5000,
-          'ID Fórmula': '',
-          'ID Esencia': 'ESENCIA002',
-          'Esencia Gramos': 5
-        }
-      ];
-
-      const ws = XLSX.utils.json_to_sheet(datosFormato);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Productos');
-      ws['!cols'] = [
-        { wch: 15 },
-        { wch: 25 },
-        { wch: 15 },
-        { wch: 10 },
-        { wch: 12 },
-        { wch: 15 },
-        { wch: 15 },
-        { wch: 12 }
-      ];
-      XLSX.writeFile(wb, 'plantilla_productos.xlsx');
-      toast.success('Plantilla descargada correctamente', { containerId: 'local', position: 'top-right' });
-    } catch (err) {
-      console.error('Error:', err);
-      toast.error('Error al descargar la plantilla', { containerId: 'local', position: 'top-right' });
-    }
-  };
-
   const importarExcel = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    e.target.value = '';
 
+    setLoading(true);
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
         const data = new Uint8Array(event.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-        setLoading(true);
-        let importados = 0;
-        let saltados = 0;
-        const productosImportados = [];
-        
-        for (const row of jsonData) {
-          if (!row.Nombre || !row.Categoría) {
-            saltados++;
-            continue;
-          }
-
-          const categoriaUpper = (row.Categoría || '').toString().trim().toUpperCase();
-          const tieneFormula = row['ID Fórmula'] && row['ID Fórmula'].toString().trim() !== '';
-          const precioRaw = row['Precio'] !== undefined ? row['Precio'] : '';
-          const stockRaw = row['Stock'] !== undefined ? row['Stock'] : '';
-          const idEsenciaRaw = row['ID Esencia'] !== undefined ? row['ID Esencia'] : '';
-          const gramosRaw = row['Esencia Gramos'] !== undefined ? row['Esencia Gramos'] : '';
-
-          const idProducto = row.ID ? row.ID.toString().padStart(12, '0') : generarIdIncremental();
-
-          if (tieneFormula) {
-            if (precioRaw === '' || precioRaw === undefined) {
-              saltados++;
-              continue;
-            }
-            const docRef = doc(db, 'PRODUCTOS', idProducto);
-            const productoNuevo = {
-              id: idProducto,
-              name: row.Nombre,
-              category: row.Categoría,
-              price: parseFloat(precioRaw),
-              idFormula: row['ID Fórmula'],
-              idEsencia: idEsenciaRaw || deleteField()
-            };
-            await setDoc(docRef, productoNuevo);
-            productosImportados.push({ documentId: idProducto, ...productoNuevo });
-            importados++;
-          } else if (categoriaUpper === 'ADICIONALES') {
-            if (!idEsenciaRaw || gramosRaw === undefined || gramosRaw === '' || precioRaw === '' || precioRaw === undefined) {
-              saltados++;
-              continue;
-            }
-            const docRef = doc(db, 'PRODUCTOS', idProducto);
-            const productoNuevo = {
-              id: idProducto,
-              name: row.Nombre,
-              category: row.Categoría,
-              price: parseFloat(precioRaw),
-              idEsencia: idEsenciaRaw,
-              esenciaGramos: Number(gramosRaw)
-            };
-            await setDoc(docRef, productoNuevo);
-            productosImportados.push({ documentId: idProducto, ...productoNuevo });
-            importados++;
-          } else {
-            if (precioRaw === '' || precioRaw === undefined || stockRaw === undefined || stockRaw === '') {
-              saltados++;
-              continue;
-            }
-            const docRef = doc(db, 'PRODUCTOS', idProducto);
-            const productoNuevo = {
-              id: idProducto,
-              name: row.Nombre,
-              category: row.Categoría,
-              stock: parseInt(stockRaw),
-              price: parseFloat(precioRaw)
-            };
-            await setDoc(docRef, productoNuevo);
-            productosImportados.push({ documentId: idProducto, ...productoNuevo });
-            importados++;
-          }
+        if (!workbook.SheetNames.length) {
+          throw new Error('El archivo no contiene hojas');
         }
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+        const productosSnapshot = await getDocs(collection(db, 'PRODUCTOS'));
+        const productosPorId = new Map();
+        let ultimoIdNumerico = 0;
+        productosSnapshot.docs.forEach(productoDoc => {
+          const producto = { documentId: productoDoc.id, ...productoDoc.data() };
+          if (producto.id) productosPorId.set(String(producto.id), producto);
+          if (producto.documentId) productosPorId.set(String(producto.documentId), producto);
+          const idNumerico = parseInt(producto.id || producto.documentId, 10);
+          if (Number.isFinite(idNumerico)) ultimoIdNumerico = Math.max(ultimoIdNumerico, idNumerico);
+        });
+        const campos = [
+          { columna: 'Nombre', campo: 'name', etiqueta: 'Nombre', tipo: 'texto' },
+          { columna: 'Categoría', campo: 'category', etiqueta: 'Categoría', tipo: 'texto' },
+          { columna: 'Stock', campo: 'stock', etiqueta: 'Stock', tipo: 'entero' },
+          { columna: 'Precio', campo: 'price', etiqueta: 'Precio', tipo: 'numero' },
+          { columna: 'ID Fórmula', campo: 'idFormula', etiqueta: 'ID Fórmula', tipo: 'texto' },
+          { columna: 'ID Esencia', campo: 'idEsencia', etiqueta: 'ID Esencia', tipo: 'texto' },
+          { columna: 'Esencia Gramos', campo: 'esenciaGramos', etiqueta: 'Esencia Gramos', tipo: 'numero' }
+        ];
+        const cambios = [];
+        const idsProcesados = new Set();
+        let productosNuevos = 0;
+        let filasInvalidas = 0;
 
-        // Actualizar caché con los nuevos productos
-        productosImportados.forEach(p => agregarProductoAlCache(p));
+        jsonData.forEach(row => {
+          const idOriginal = String(row.ID ?? '').trim();
+          let idProducto = idOriginal ? idOriginal.padStart(12, '0') : '';
+          if (!idProducto) {
+            do {
+              ultimoIdNumerico++;
+              idProducto = ultimoIdNumerico.toString().padStart(12, '0');
+            } while (productosPorId.has(idProducto) || idsProcesados.has(idProducto));
+          }
+          if (idsProcesados.has(idProducto)) {
+            filasInvalidas++;
+            return;
+          }
+          idsProcesados.add(idProducto);
 
-        toast.success(`${importados} productos importados correctamente${saltados ? `, ${saltados} fila(s) omitida(s)` : ''}`, { containerId: 'local', position: 'top-right' });
-        setShowImportModal(false);
-        // NO llamar a cargarProductos() - el listener ya actualiza automáticamente
+          const producto = productosPorId.get(idProducto) || productosPorId.get(idOriginal);
+          const actualizaciones = {};
+          const camposCambiados = [];
+          let filaInvalida = false;
+          const valoresExcel = {};
+
+          campos.forEach(({ columna, campo, etiqueta, tipo }) => {
+            const valorExcel = row[columna];
+            if (valorExcel === null || valorExcel === undefined || String(valorExcel).trim() === '') return;
+
+            let valorNuevo = valorExcel;
+            if (tipo === 'texto') {
+              valorNuevo = String(valorExcel).trim();
+            } else {
+              valorNuevo = Number(valorExcel);
+              if (!Number.isFinite(valorNuevo) || (tipo === 'entero' && !Number.isInteger(valorNuevo))) {
+                filaInvalida = true;
+                return;
+              }
+            }
+
+            valoresExcel[campo] = valorNuevo;
+          });
+
+          if (filaInvalida) {
+            filasInvalidas++;
+            return;
+          }
+
+          if (!row.Nombre || !row.Categoría) {
+            filasInvalidas++;
+            return;
+          }
+
+          if (!producto) {
+            const categoria = String(row.Categoría).trim();
+            const categoriaUpper = categoria.toUpperCase();
+            const idFormula = String(row['ID Fórmula'] ?? '').trim();
+            const esAdicional = categoriaUpper === 'ADICIONALES';
+            const precio = valoresExcel.price;
+            const stock = valoresExcel.stock;
+            const idEsencia = String(row['ID Esencia'] ?? '').trim();
+            const esenciaGramos = valoresExcel.esenciaGramos;
+
+            if (!Number.isFinite(precio)
+              || (!idFormula && esAdicional && (!idEsencia || esenciaGramos === undefined))
+              || (!idFormula && !esAdicional && stock === undefined)) {
+              filasInvalidas++;
+              return;
+            }
+
+            const productoNuevo = {
+              id: idProducto,
+              name: String(row.Nombre).trim(),
+              category: categoria,
+              price: precio
+            };
+            if (idFormula) {
+              productoNuevo.idFormula = idFormula;
+              if (idEsencia) productoNuevo.idEsencia = idEsencia;
+            } else if (esAdicional) {
+              productoNuevo.idEsencia = idEsencia;
+              productoNuevo.esenciaGramos = esenciaGramos;
+            } else {
+              productoNuevo.stock = stock;
+            }
+
+            cambios.push({
+              tipo: 'nuevo',
+              documentId: idProducto,
+              id: idProducto,
+              nombre: productoNuevo.name,
+              categoria: productoNuevo.category,
+              datos: productoNuevo,
+              campos: Object.entries(productoNuevo)
+                .filter(([campo]) => campo !== 'id')
+                .map(([campo, nuevo]) => ({
+                  campo,
+                  etiqueta: campos.find(item => item.campo === campo)?.etiqueta || campo,
+                  anterior: '',
+                  nuevo
+                }))
+            });
+            productosNuevos++;
+            return;
+          }
+
+          campos.forEach(({ columna, campo, etiqueta, tipo }) => {
+            const valorNuevo = valoresExcel[campo];
+            if (valorNuevo === undefined) return;
+            const valorActual = producto[campo];
+            const iguales = tipo === 'texto'
+              ? String(valorActual ?? '').trim() === valorNuevo
+              : Number.isFinite(Number(valorActual)) && Number(valorActual) === valorNuevo;
+
+            if (!iguales) {
+              actualizaciones[campo] = valorNuevo;
+              camposCambiados.push({
+                campo,
+                etiqueta,
+                anterior: valorActual ?? '',
+                nuevo: valorNuevo
+              });
+            }
+          });
+
+          if (camposCambiados.length > 0) {
+            cambios.push({
+              tipo: 'actualizar',
+              documentId: producto.documentId,
+              id: producto.id || idProducto,
+              nombre: producto.name || row.Nombre || 'Producto sin nombre',
+              categoria: actualizaciones.category || producto.category || '',
+              categoriaAnterior: producto.category || '',
+              actualizaciones,
+              campos: camposCambiados
+            });
+          }
+        });
+
+        setCambiosImportacion(cambios);
+        setResumenImportacion({ productosNuevos, filasInvalidas });
+        if (cambios.length === 0) {
+          toast.info('No hay productos nuevos ni cambios válidos para aplicar', { containerId: 'local', position: 'top-right' });
+        } else if (filasInvalidas) {
+          toast.info(`Se encontraron ${productosNuevos} producto(s) nuevos y ${cambios.length - productosNuevos} producto(s) con cambios. Se omitieron ${filasInvalidas} fila(s) inválida(s).`, { containerId: 'local', position: 'top-right' });
+        }
       } catch (err) {
         console.error('Error al importar:', err);
-        toast.error('Error al importar el archivo', { containerId: 'local', position: 'top-right' });
+        toast.error('No se pudo comparar el archivo con el inventario. Verifica el Excel y tu conexión.', { containerId: 'local', position: 'top-right' });
       } finally {
         setLoading(false);
-        e.target.value = '';
       }
     };
+    reader.onerror = () => {
+      console.error('Error al leer el archivo de inventario');
+      toast.error('No se pudo leer el archivo seleccionado', { containerId: 'local', position: 'top-right' });
+      setLoading(false);
+    };
     reader.readAsArrayBuffer(file);
+  };
+
+  const confirmarActualizacion = async () => {
+    if (cambiosImportacion.length === 0) return;
+
+    setLoading(true);
+    let productosProcesados = 0;
+    try {
+      for (let inicio = 0; inicio < cambiosImportacion.length; inicio += 500) {
+        const lote = cambiosImportacion.slice(inicio, inicio + 500);
+        const batch = writeBatch(db);
+        lote.forEach(producto => {
+          const referencia = doc(db, 'PRODUCTOS', producto.documentId);
+          if (producto.tipo === 'nuevo') {
+            batch.set(referencia, producto.datos);
+          } else {
+            batch.update(referencia, producto.actualizaciones);
+          }
+        });
+        await batch.commit();
+        productosProcesados += lote.length;
+      }
+
+      const nuevos = cambiosImportacion.filter(producto => producto.tipo === 'nuevo').length;
+      const actualizados = cambiosImportacion.length - nuevos;
+      toast.success(`Inventario actualizado: ${nuevos} producto(s) agregado(s) y ${actualizados} producto(s) actualizado(s)`, { containerId: 'local', position: 'top-right' });
+      setCambiosImportacion([]);
+      setResumenImportacion(null);
+      setShowImportModal(false);
+    } catch (err) {
+      console.error('Error al actualizar inventario:', err);
+      toast.error(`No se pudo completar la actualización. Se procesaron ${productosProcesados} producto(s); revisa el inventario antes de volver a intentarlo.`, { containerId: 'local', position: 'top-right' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const closeModal = () => {
@@ -808,6 +887,11 @@ export default function AdminInventario() {
 
   const closeImportModal = () => {
     setShowImportModal(false);
+    setCambiosImportacion([]);
+    setResumenImportacion(null);
+    setFiltroCategoriaImportacion('');
+    setFiltroAccionImportacion('');
+    setFiltroCampoImportacion('');
   };
 
   const handleLimpiarBusqueda = () => {
@@ -823,6 +907,18 @@ export default function AdminInventario() {
     return idsNumericos.length > 0 ? Math.max(...idsNumericos) : 0;
   };
 
+  const categoriasImportacion = [...new Set(cambiosImportacion.map(producto => producto.categoria).filter(Boolean))];
+  const camposImportacion = [...new Set(cambiosImportacion.flatMap(producto => producto.campos.map(cambio => cambio.etiqueta)))];
+  const cambiosImportacionFiltrados = cambiosImportacion.flatMap(producto => {
+    if (filtroCategoriaImportacion && producto.categoria !== filtroCategoriaImportacion) return [];
+    if (filtroAccionImportacion && producto.tipo !== filtroAccionImportacion) return [];
+
+    const campos = producto.campos.filter(cambio =>
+      !filtroCampoImportacion || cambio.etiqueta === filtroCampoImportacion
+    );
+    return campos.map(cambio => ({ producto, cambio }));
+  });
+
   return (
     <div className="inventario-container">
       <div className="inventario-header">
@@ -834,8 +930,19 @@ export default function AdminInventario() {
           <button onClick={descargarExcel} className="btn btn-secondary" disabled={loading}>
             <FaDownload /> Descargar Excel
           </button>
-          <button onClick={() => setShowImportModal(true)} className="btn btn-secondary" disabled={loading}>
-            <FaUpload /> Importar Excel
+          <button
+            onClick={() => {
+              setCambiosImportacion([]);
+              setResumenImportacion(null);
+              setFiltroCategoriaImportacion('');
+              setFiltroAccionImportacion('');
+              setFiltroCampoImportacion('');
+              setShowImportModal(true);
+            }}
+            className="btn btn-secondary"
+            disabled={loading}
+          >
+            <FaUpload /> Actualizar inventario
           </button>
           <button onClick={() => setShowPricesModal(true)} className="btn btn-secondary" disabled={loading}>
             <FaEdit /> Actualizar precios
@@ -1154,107 +1261,22 @@ export default function AdminInventario() {
       )}
 
       {showImportModal && (
-        <div className="modal-overlay" onClick={closeImportModal}>
+        <div className="modal-overlay" onClick={loading ? undefined : closeImportModal}>
           <div className="modal modal-import" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>📥 Importar Productos desde Excel</h3>
-              <button onClick={closeImportModal} className="close-btn">&times;</button>
+              <h3>📥 Actualizar inventario desde Excel</h3>
+              <button onClick={closeImportModal} className="close-btn" disabled={loading}>&times;</button>
             </div>
             <div className="modal-content">
-              <div className="import-info">
-                <h4>Formato esperado del Excel:</h4>
-                <div className="formato-tabla">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Columna A</th>
-                        <th>Columna B</th>
-                        <th>Columna C</th>
-                        <th>Columna D</th>
-                        <th>Columna E</th>
-                        <th>Columna F</th>
-                        <th>Columna G</th>
-                        <th>Columna H</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="header-cell">ID</td>
-                        <td className="header-cell">Nombre</td>
-                        <td className="header-cell">Categoría</td>
-                        <td className="header-cell">Stock</td>
-                        <td className="header-cell">Precio</td>
-                        <td className="header-cell">ID Fórmula</td>
-                        <td className="header-cell">ID Esencia</td>
-                        <td className="header-cell">Esencia Gramos</td>
-                      </tr>
-                      <tr>
-                        <td className="type-cell">String (12 dígitos)</td>
-                        <td className="type-cell">String (MAYÚSCULAS)</td>
-                        <td className="type-cell">String</td>
-                        <td className="type-cell">Número</td>
-                        <td className="type-cell">Número</td>
-                        <td className="type-cell">String (opcional)</td>
-                        <td className="type-cell">String (opcional)</td>
-                        <td className="type-cell">Número (opcional)</td>
-                      </tr>
-                      <tr>
-                        <td className="example-cell">000000000001</td>
-                        <td className="example-cell">PERFUME ROSA</td>
-                        <td className="example-cell">PERFUME</td>
-                        <td className="example-cell"></td>
-                        <td className="example-cell">120000</td>
-                        <td className="example-cell">FORMULA001</td>
-                        <td className="example-cell">ESENCIA001</td>
-                        <td className="example-cell"></td>
-                      </tr>
-                      <tr>
-                        <td className="example-cell">000000000002</td>
-                        <td className="example-cell">COLONIA LAVANDA</td>
-                        <td className="example-cell">COLONIA</td>
-                        <td className="example-cell">30</td>
-                        <td className="example-cell">85000</td>
-                        <td className="example-cell"></td>
-                        <td className="example-cell"></td>
-                        <td className="example-cell"></td>
-                      </tr>
-                      <tr>
-                        <td className="example-cell">000000000003</td>
-                        <td className="example-cell">ADICIONAL EJEMPLO</td>
-                        <td className="example-cell">ADICIONALES</td>
-                        <td className="example-cell"></td>
-                        <td className="example-cell">5000</td>
-                        <td className="example-cell"></td>
-                        <td className="example-cell">ESENCIA002</td>
-                        <td className="example-cell">5</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="import-notes">
-                  <h5>📝 Notas importantes:</h5>
-                  <ul>
-                    <li><strong>ID:</strong> Debe tener 12 dígitos con ceros a la izquierda. Se genera automáticamente si está vacío.</li>
-                    <li><strong>Nombre:</strong> Será convertido automáticamente a MAYÚSCULAS.</li>
-                    <li><strong>Categoría:</strong> Campo obligatorio. Debe coincidir con categorías existentes o crear nuevas.</li>
-                    <li><strong>Stock:</strong> Para productos SIN fórmula: campo obligatorio. Para productos CON fórmula: no es necesario (dejar en blanco).</li>
-                    <li><strong>Precio:</strong> Para productos CON fórmula: indique el precio en esta columna. Para productos SIN fórmula: número decimal obligatorio.</li>
-                    <li><strong>ID Fórmula:</strong> Campo opcional. Déjalo en blanco si no aplica.</li>
-                    <li><strong>ID Esencia / Esencia Gramos:</strong> Para ADICIONALES, deben proveerse. Para productos con fórmula, puedes indicar ID Esencia si aplica.</li>
-                  </ul>
-                </div>
-              </div>
-
+              <p className="import-description">
+                Selecciona el Excel del inventario. Los productos existentes se compararán por ID y solo se mostrarán los campos que cambiaron; los productos que ya no existan se agregarán como nuevos. Así puedes restaurar todo el inventario aunque esté vacío. Las celdas vacías no reemplazan valores existentes.
+              </p>
               <div className="import-actions">
-                <button onClick={descargarFormatoExcel} className="btn btn-secondary">
-                  <FaDownload /> Descargar Plantilla
-                </button>
-                <label className="btn btn-primary">
-                  <FaUpload /> Seleccionar Archivo
-                  <input 
-                    type="file" 
-                    accept=".xlsx,.xls" 
+                <label className="btn btn-secondary">
+                  <FaUpload /> {cambiosImportacion.length ? 'Seleccionar otro Excel' : 'Seleccionar Excel'}
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
                     onChange={importarExcel}
                     style={{ display: 'none' }}
                     disabled={loading}
@@ -1262,9 +1284,95 @@ export default function AdminInventario() {
                 </label>
               </div>
 
-              <button onClick={closeImportModal} className="btn btn-secondary" style={{ marginTop: '15px', width: '100%' }}>
-                Cerrar
-              </button>
+              {resumenImportacion && (
+                <>
+                  <h4 className="changes-title">
+                    {cambiosImportacion.length
+                      ? `Revisión: ${resumenImportacion.productosNuevos} producto(s) nuevo(s) y ${cambiosImportacion.length - resumenImportacion.productosNuevos} producto(s) por actualizar`
+                      : 'No hay productos nuevos ni cambios'}
+                  </h4>
+                  {resumenImportacion.filasInvalidas > 0 && (
+                    <p className="import-summary">
+                      Se omitieron {resumenImportacion.filasInvalidas} fila(s) con datos incompletos, ID duplicado o valores numéricos inválidos.
+                    </p>
+                  )}
+                  {cambiosImportacion.length > 0 && (
+                    <>
+                      <div className="import-review-filters">
+                        <label>
+                          Categoría
+                          <select value={filtroCategoriaImportacion} onChange={e => setFiltroCategoriaImportacion(e.target.value)}>
+                            <option value="">Todas</option>
+                            {categoriasImportacion.map(categoria => <option key={categoria} value={categoria}>{categoria}</option>)}
+                          </select>
+                        </label>
+                        <label>
+                          Acción
+                          <select value={filtroAccionImportacion} onChange={e => setFiltroAccionImportacion(e.target.value)}>
+                            <option value="">Todas</option>
+                            <option value="nuevo">Agregar</option>
+                            <option value="actualizar">Actualizar</option>
+                          </select>
+                        </label>
+                        <label>
+                          Columna modificada
+                          <select value={filtroCampoImportacion} onChange={e => setFiltroCampoImportacion(e.target.value)}>
+                            <option value="">Todas</option>
+                            {camposImportacion.map(campo => <option key={campo} value={campo}>{campo}</option>)}
+                          </select>
+                        </label>
+                      </div>
+                      <div className="changes-table">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Producto</th>
+                              <th>Categoría</th>
+                              <th>Acción</th>
+                              <th>Campo</th>
+                              <th>Valor actual</th>
+                              <th>Nuevo valor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {cambiosImportacionFiltrados.map(({ producto, cambio }) => (
+                              <tr key={`${producto.documentId}-${cambio.campo}`}>
+                                <td>
+                                  <strong>{producto.nombre}</strong>
+                                  <small>{producto.id}</small>
+                                </td>
+                                <td>
+                                  {producto.categoriaAnterior && producto.categoriaAnterior !== producto.categoria
+                                    ? `${producto.categoriaAnterior} → ${producto.categoria}`
+                                    : producto.categoria}
+                                </td>
+                                <td>{producto.tipo === 'nuevo' ? 'Agregar' : 'Actualizar'}</td>
+                                <td>{cambio.etiqueta}</td>
+                                <td>{String(cambio.anterior)}</td>
+                                <td className="new-value">{String(cambio.nuevo)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {cambiosImportacionFiltrados.length === 0 && (
+                          <p className="sin-datos">No hay cambios que coincidan con los filtros.</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+
+              <div className="form-actions import-review-actions">
+                <button type="button" onClick={closeImportModal} className="btn btn-secondary" disabled={loading}>
+                  Cancelar
+                </button>
+                {cambiosImportacion.length > 0 && (
+                  <button type="button" onClick={confirmarActualizacion} className="btn btn-primary" disabled={loading}>
+                    {loading ? 'Actualizando...' : 'Aceptar y actualizar inventario'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
