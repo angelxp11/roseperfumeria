@@ -601,13 +601,14 @@ export default function Inventario({ onAgregarAlCarrito }) {
 											style={{ cursor: 'pointer', border: selectedEnvase && selectedEnvase.documentId === env.documentId ? '2px solid #2b7cff' : undefined }}
 										>
 											<div className="envase-card-name">{env.name}</div>
+											<div className="envase-card-code">Código: {String(env.id).slice(-4)}</div>
 											<div className="envase-card-price">${new Intl.NumberFormat('es-CO').format(env.price)}</div>
 										</div>
 									))}
 
 									{selectedEnvase && (
 										<div style={{ marginTop: '8px' }}>
-											<strong>Envase seleccionado:</strong> {selectedEnvase.name} - Precio: ${new Intl.NumberFormat('es-CO').format(selectedEnvase.price)}
+											<strong>Envase seleccionado:</strong> {selectedEnvase.name} (Código: {String(selectedEnvase.id).slice(-4)}) - Precio: ${new Intl.NumberFormat('es-CO').format(selectedEnvase.price)}
 											<div style={{ marginTop: '6px', fontSize: '0.95em', color: '#333' }}>
 												Precio refill: ${new Intl.NumberFormat('es-CO').format(Math.max(Number(selectedEnvase.price || 0) - 3000, 0))} (descuento 3000)
 											</div>
