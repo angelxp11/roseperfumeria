@@ -82,3 +82,9 @@
   background: #e3b04b;
   color: #111;
 }
+
+@media (max-width: 768px) {
+  .menu:hover .menu-logo img {
+    width: 40px;
+  }
+}

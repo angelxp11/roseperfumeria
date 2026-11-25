@@ -4,12 +4,43 @@
    CONTENEDOR PRINCIPAL
 ================================ */
 .prc-pedidos-container{
+  flex:1;
   width:100%;
   max-width:1200px;
+  min-height:0;
   margin:0 auto;
+  padding:0 12px 28px;
+  min-width:0;
+  overflow-y:auto;
+  overscroll-behavior-y:contain;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(176,116,69,.65) rgba(255,255,255,.05);
   font-family:'Segoe UI',system-ui,sans-serif;
   color:var(--color-text);
   border-color: var(--color-secondary);
+}
+
+.prc-pedidos-container::-webkit-scrollbar {
+  width:6px;
+}
+
+.prc-pedidos-container::-webkit-scrollbar-track {
+  background:rgba(255,255,255,.05);
+}
+
+.prc-pedidos-container::-webkit-scrollbar-thumb {
+  background:rgba(176,116,69,.65);
+  border-radius:8px;
+}
+
+.prc-pedidos-screen {
+  display:flex;
+  flex:1;
+  flex-direction:column;
+  min-height:0;
+  min-width:0;
+  width:100%;
 }
 
 /* ===============================
@@ -83,12 +114,16 @@
 
 /* nuevo encabezado y botones de modo fuera del contenedor principal */
 .prc-header-switch{
-  position:sticky;
-  top:0;
+  position:relative;
+  flex-shrink:0;
   background:var(--color-bg);
   z-index:10;
   text-align:center;
-  padding:12px 0 8px;
+  width:100%;
+  max-width:1200px;
+  margin:0 auto 12px;
+  padding:12px 12px 14px;
+  border-bottom:1px solid var(--color-border);
 }
 
 .prc-mode-buttons{
@@ -97,6 +132,7 @@
   border-radius:50px;
   overflow:hidden;
   margin-top:8px;
+  max-width:100%;
 }
 
 .prc-mode-buttons button{
@@ -345,6 +381,29 @@
   border:1px solid var(--color-border);
   border-radius:10px;
   background:rgba(255,255,255,0.04);
+  scrollbar-width:thin;
+  scrollbar-color:rgba(176,116,69,.65) rgba(255,255,255,.05);
+  -webkit-overflow-scrolling:touch;
+}
+
+.prc-table-wrapper::-webkit-scrollbar,
+.prc-product-search-results::-webkit-scrollbar,
+.prc-modal-prices .prc-price-list::-webkit-scrollbar {
+  width:6px;
+  height:6px;
+}
+
+.prc-table-wrapper::-webkit-scrollbar-track,
+.prc-product-search-results::-webkit-scrollbar-track,
+.prc-modal-prices .prc-price-list::-webkit-scrollbar-track {
+  background:rgba(255,255,255,.05);
+}
+
+.prc-table-wrapper::-webkit-scrollbar-thumb,
+.prc-product-search-results::-webkit-scrollbar-thumb,
+.prc-modal-prices .prc-price-list::-webkit-scrollbar-thumb {
+  background:rgba(176,116,69,.65);
+  border-radius:8px;
 }
 
 .prc-table-fixed {
@@ -575,6 +634,13 @@
    RESPONSIVE
 ================================ */
 @media (max-width:768px){
+  .prc-header-switch {
+    padding:10px 8px 12px;
+  }
+
+  .prc-pedidos-container {
+    padding:0 4px 20px;
+  }
 
   .prc-pedidos-controls{
     flex-direction:column;
@@ -586,6 +652,24 @@
 
   .prc-product-search{
     width:100%;
+  }
+
+  .prc-mode-buttons {
+    width:min(100%, 360px);
+  }
+
+  .prc-mode-buttons button {
+    padding:8px 12px;
+    font-size:13px;
+  }
+
+  .prc-orders-list {
+    grid-template-columns:minmax(0, 1fr);
+  }
+
+  .prc-order-entry {
+    min-width:0;
+    overflow-wrap:anywhere;
   }
 
   .prc-order-summary table{

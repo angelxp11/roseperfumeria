@@ -576,7 +576,7 @@ export default function PedidosReabastecer() {
   });
 
   return (
-    <>
+    <div className="prc-pedidos-screen">
       <div className="prc-header-switch">
         <h2>📝 Pedido de Reabastecimiento</h2>
         <div className="prc-mode-buttons">
@@ -1042,6 +1042,6 @@ export default function PedidosReabastecer() {
       )}
 
     </div>
-  </>
+    </div>
   );
 }

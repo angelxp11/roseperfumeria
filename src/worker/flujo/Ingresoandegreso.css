@@ -2,6 +2,12 @@
 
 .flujo-container-main {
   width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .flujo-header-main {
@@ -44,6 +50,10 @@
     width: 100%;
     margin-left: 0;
     justify-content: space-between;
+  }
+
+  .flujo-container-main {
+    padding: 18px;
   }
 }
 
@@ -89,7 +99,9 @@
 .movimientos-recientes {
   margin-top: 8px;
   margin-bottom: 28px;
+  padding-top: 20px;
   color: var(--color-text);
+  border-top: 1px solid var(--color-border);
 }
 
 .movimientos-recientes h3 {
@@ -282,6 +294,29 @@
 }
 
 @media (max-width: 500px) {
+  .flujo-container-main {
+    padding: 14px;
+  }
+
+  .flujo-header-main {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .flujo-fecha {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .movimiento-item {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .movimiento-item time {
+    align-self: flex-end;
+  }
+
   .flujo-buttons-main {
     flex-direction: column;
   }

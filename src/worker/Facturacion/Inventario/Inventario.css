@@ -77,10 +77,13 @@
   overflow-x: hidden;
   border-radius: 8px;
   padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(176, 116, 69, 0.7) rgba(255, 255, 255, 0.06);
+  -webkit-overflow-scrolling: touch;
 }
 
 .categorias-list::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 .categorias-list::-webkit-scrollbar-track {
@@ -440,16 +443,16 @@
 
 @media (max-width: 1024px) {
   .right-panel {
-    flex: 0 0 auto;
-    min-height: 300px;
+    flex: 1 0 280px;
+    min-height: 0;
   }
 
   .categorias-container {
-    min-height: 250px;
+    min-height: 0;
   }
 
   .productos-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
     gap: 10px;
   }
 
@@ -475,6 +478,37 @@
 }
 
 @media (max-width: 768px) {
+  .right-panel {
+    flex: 0 0 auto;
+  }
+
+  .categorias-container {
+    flex: 0 0 auto;
+    min-height: 70vh;
+    min-height: max(460px, 70vh);
+  }
+
+  .categorias-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 55vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .categorias-list::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .categorias-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .categorias-list::-webkit-scrollbar-thumb {
+    background: rgba(176, 116, 69, 0.75);
+    border-radius: 8px;
+  }
+
   .tabs-container {
     gap: 6px;
   }
@@ -485,7 +519,7 @@
   }
 
   .productos-grid {
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
     gap: 8px;
     padding: 8px;
   }
@@ -527,7 +561,7 @@
   }
 
   .productos-grid {
-    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
     gap: 6px;
     padding: 6px;
   }
@@ -559,6 +593,10 @@
   .producto-formula {
     font-size: 6px;
     padding: 1px 4px;
+  }
+
+  .categorias-container {
+    padding: 10px;
   }
 }
 

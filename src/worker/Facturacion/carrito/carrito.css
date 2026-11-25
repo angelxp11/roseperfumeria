@@ -57,6 +57,27 @@
   flex: 1;
   overflow-y: auto;
   padding: 5px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(176, 116, 69, 0.7) rgba(255, 255, 255, 0.06);
+  -webkit-overflow-scrolling: touch;
+}
+
+.carrito-items::-webkit-scrollbar {
+  width: 6px;
+}
+
+.carrito-items::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+}
+
+.carrito-items::-webkit-scrollbar-thumb {
+  background: rgba(176, 116, 69, 0.7);
+  border-radius: 8px;
+}
+
+.carrito-items::-webkit-scrollbar-thumb:hover {
+  background: rgba(176, 116, 69, 0.9);
 }
 
 .carrito-vacio {
@@ -308,37 +329,79 @@
 
 @media (max-width: 480px) {
   .carrito-header {
-    padding: 6px;
-    font-size: 9px;
-  }
-
-  .col-id {
-    flex: 0 0 25px;
-  }
-
-  .col-nombre {
-    flex: 0 0 50px;
-  }
-
-  .col-cantidad,
-  .col-valor,
-  .col-total {
-    flex: 0 0 40px;
+    display: none;
   }
 
   .carrito-item {
-    padding: 6px;
-    font-size: 9px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "nombre nombre eliminar"
+      "cantidad valor total";
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    font-size: 11px;
+  }
+
+  .carrito-item .col-id {
+    display: none;
+  }
+
+  .carrito-item .col-nombre {
+    grid-area: nombre;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .carrito-item .col-cantidad {
+    grid-area: cantidad;
+    width: max-content;
+  }
+
+  .carrito-item .col-valor {
+    grid-area: valor;
+    flex: none;
+    text-align: right;
+  }
+
+  .carrito-item .col-total {
+    grid-area: total;
+    flex: none;
+    text-align: right;
+  }
+
+  .carrito-item .btn-eliminar {
+    grid-area: eliminar;
+    margin: 0;
+  }
+
+  .item-cantidad {
+    gap: 3px;
+  }
+
+  .item-cantidad input {
+    width: 24px;
   }
 
   .total-amount {
-    flex-direction: column;
-    text-align: center;
-    gap: 10px;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
     font-size: 12px;
+    margin-right: 0;
+    gap: 4px;
+  }
+
+  .total-section {
+    padding: 10px;
   }
 
   .total-value {
     font-size: 16px;
+  }
+
+  .btn-pagar {
+    min-width: 48px;
   }
 }

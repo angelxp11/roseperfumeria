@@ -1,24 +1,11 @@
 .facturacion-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  width: 100%;
   gap: 20px;
   min-height: 0;
-}
-
-.facturacion-container {
-  display: flex;
-  gap: 20px;
-  width: 100%;
-}
-
-.facturacion-container > :first-child {
-  flex: 0 0 25%;
-  max-height: 50px;
-}
-
-.facturacion-container > :last-child {
-  flex: 1;
+  min-width: 0;
 }
 
 .facturacion-header {
@@ -30,6 +17,7 @@
   border-radius: 8px;
   flex-shrink: 0;
   background: rgba(0, 0, 0, 0.02);
+  min-width: 0;
 }
 
 .facturacion-header h2 {
@@ -54,6 +42,7 @@
 
 .caja-buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -86,6 +75,7 @@
   gap: 20px;
   flex: 1;
   min-height: 0;
+  min-width: 0;
 }
 
 .btn-descargar {
@@ -104,13 +94,98 @@
   .facturacion-content {
     flex-direction: column;
     gap: 15px;
+    overflow-y: auto;
+    padding-right: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(176, 116, 69, 0.7) rgba(255, 255, 255, 0.06);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .facturacion-content::-webkit-scrollbar,
+  .facturacion-container::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .facturacion-content::-webkit-scrollbar-track,
+  .facturacion-container::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+  }
+
+  .facturacion-content::-webkit-scrollbar-thumb,
+  .facturacion-container::-webkit-scrollbar-thumb {
+    background: rgba(176, 116, 69, 0.7);
+    border-radius: 8px;
+  }
+
+  .facturacion-header {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .fecha-facturacion {
+    flex: 1 1 220px;
+  }
+
+  .caja-buttons {
+    width: 100%;
+  }
+
+  .caja-buttons .btn-caja {
+    flex: 1 1 140px;
+  }
+
+  .facturacion-content > .carrito-container,
+  .facturacion-content > .right-panel {
+    flex: 1 0 280px;
+    width: auto;
+    min-width: 0;
   }
 }
 
 @media (max-width: 768px) {
-  .caja-buttons {
-    flex-direction: column;
-    gap: 8px;
+  .facturacion-container {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .content {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .facturacion-content {
+    display: contents;
+  }
+
+  .facturacion-content > .carrito-container {
+    order: 1;
+    flex: 0 0 400px;
+    min-height: 400px;
+  }
+
+  .facturacion-content > .right-panel {
+    order: 2;
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+
+  .content {
+    scrollbar-width: auto;
+  }
+
+  .content::-webkit-scrollbar {
+    width: 9px;
+  }
+
+  .facturacion-header {
+    order: 3;
   }
 
   .btn-caja {
@@ -119,17 +194,48 @@
   }
 
   .facturacion-header {
-    flex-direction: column;
-    gap: 15px;
-    padding: 10px;
+    padding: 12px;
   }
 
   .fecha-facturacion {
-    width: 100%;
-    justify-content: space-between;
+    flex: 1 1 100%;
   }
 
   .facturacion-header h2 {
     font-size: 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .facturacion-container {
+    gap: 12px;
+  }
+
+  .facturacion-header {
+    padding: 10px;
+  }
+
+  .fecha-facturacion {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .fecha-facturacion input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .caja-buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+  }
+
+  .caja-buttons .btn-caja {
+    min-width: 0;
+    padding: 8px;
+    font-size: 11px;
   }
 }
